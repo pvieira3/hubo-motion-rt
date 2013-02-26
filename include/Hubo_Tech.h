@@ -60,13 +60,19 @@ extern "C" {
 
 // For data handling
 #include <math.h>
-#include <eigen3/Eigen/Core>
-#include <eigen3/Eigen/Geometry>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <vector>
+
+// For dart_Lite
+#include <dynamics/SkeletonDynamics.h>
+#include <robotics/parser/dart_parser/DartLoader.h>
 #include <complex.h>
 
 typedef Eigen::Matrix< double, 6, 1 > Vector6d;
 typedef Eigen::Vector3d Vector3d;
+Eigen::MatrixXd mT_Torso2Neck;
+Eigen::MatrixXd mT_Neck2Torso;
 
 #define CtrlNE  0
 #define CtrlRA  1
@@ -827,7 +833,7 @@ public:
      *
      * side specifies which arm (LEFT or RIGHT)
     */
-    void huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int side);
+    void huboArmIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev, int side);
     /**
      * Same as huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int side), but it will
      * also apply a final end effector transformation at the end, specified by the fifth argument.
@@ -847,7 +853,7 @@ public:
      *
      * Similar to huboArmIK() but applied to the leg
     */
-    void huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int side);
+    void huboLegIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev, int side);
 
     /**
      * A specialized differential IK (solved analytically) for moving the hip
@@ -880,27 +886,21 @@ public:
     /**
      * Still experimental. PLEASE DO NOT USE.
     */
-    void initLocalCOMs();
-    /**
-     * Still experimental. PLEASE DO NOT USE.
-    */
     Eigen::Vector3d getCOM_FullBody();
     /**
-     * Still experimental. PLEASE DO NOT USE.
-    */
-    Eigen::Vector3d getCOM_Arm( int _side = LEFT );
-    /**
-     * Still experimental. PLEASE DO NOT USE.
-    */
-    Eigen::Vector3d getCOM_Leg( int _side = LEFT );
-    /**
-     * Still experimental. PLEASE DO NOT USE.
-    */
-    Eigen::Vector3d getCOM_Torso();
+     * Loading function
+     */
+    bool loadURDFModel( std::string _urdfFilename );
+    void updateDartValues();
+    dynamics::SkeletonDynamics* mSkel;
+    Eigen::VectorXd mLeftLegConfig;
+    Eigen::VectorXd mRightLegConfig;
+    std::vector<int> mLeftArmDofIds;
 
 protected:
 
     void techInit();
+    void initDartValues();
 
     double kneeSingularityThreshold;
     double kneeSingularityDanger;
@@ -946,27 +946,29 @@ protected:
     // 6) Auxiliary ( Neck & Waist )
 
 
-
-    /** Constant values */
-    static const int mNumDofs_Arm = 6;
-    static const int mNumDofs_Leg = 6;
-    static const int mNumDofs_Torso = 2;
-
-    double mMass_Total_Arm;
-    double mMass_Total_Leg;
-    std::vector<Eigen::Vector3d> mLocalCOMs_Leg;
-    std::vector<double> mMasses_Leg;
-
-    std::vector<Eigen::Vector3d> mLocalCOMs_Arm;
-    std::vector<double> mMasses_Arm;
-
-    std::vector<Eigen::Vector3d> mLocalCOMs_Torso;
-    std::vector<double> mMasses_Torso;
-
 private:
     
     int ctrlMap[HUBO_JOINT_COUNT];
     int localMap[HUBO_JOINT_COUNT];
+
+    // DART Info
+    // Arm
+    int mNumArmDofs;
+    std::vector<std::string> mLeftArmLinkNames;
+    std::vector<std::string> mRightArmLinkNames;
+    std::vector<int> mRightArmDofIds;
+
+    Eigen::VectorXd mLeftArmConfig;
+    Eigen::VectorXd mRightArmConfig;
+
+    // Leg
+    int mNumLegDofs;
+    std::vector<std::string> mLeftLegLinkNames;
+    std::vector<int> mLeftLegDofIds;
+    std::vector<std::string> mRightLegLinkNames;
+    std::vector<int> mRightLegDofIds;
+
+
 };
 
 #endif // HUBO_PLUS_H

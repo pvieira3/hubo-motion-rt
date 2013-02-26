@@ -37,6 +37,13 @@
 
 #include <Hubo_Tech.h>
 
+// ***************************
+// Include to debug the skeleton parser. Erase one this is done
+#include <kinematics/Dof.h>
+#include <kinematics/Joint.h>
+#include <kinematics/BodyNode.h>
+// **************************
+
 Hubo_Tech::Hubo_Tech()
 {
     techInit();
@@ -169,10 +176,83 @@ void Hubo_Tech::techInit()
         ctrlMap[ auxjoints[i] ] = CtrlAX;
         localMap[ auxjoints[i] ] = i;
     }
-    
+
 }
 
+void Hubo_Tech::initDartValues()
+{
+    printf("initing\n");
+    // Torso to Neck transformation
+    mT_Torso2Neck = Eigen::MatrixXd::Identity(4,4);
+    mT_Torso2Neck(0,3) = 0.012258;
+    mT_Torso2Neck(2,3) = 0.0486356; 
+    mT_Neck2Torso = mT_Torso2Neck.inverse();
 
+    // Load arm DOFs
+    mNumArmDofs = 6;
+
+    // Left Arm
+    mLeftArmLinkNames.resize( mNumArmDofs );
+    mLeftArmDofIds.resize( mNumArmDofs );
+    mLeftArmConfig.resize( mNumArmDofs );
+
+    mLeftArmLinkNames[0] = "Body_LSP"; mLeftArmLinkNames[1] = "Body_LSR";
+    mLeftArmLinkNames[2] = "Body_LSY"; mLeftArmLinkNames[3] = "Body_LEP";
+    mLeftArmLinkNames[4] = "Body_LWY"; mLeftArmLinkNames[5] = "Body_LWP";
+    
+
+    for( int i = 0; i < mNumArmDofs; ++i ) {
+      mLeftArmDofIds[i] =  mSkel->getNode( mLeftArmLinkNames[i].c_str() )->getDof(0)->getSkelIndex();
+    }
+    
+
+    // Right Arm
+    mRightArmLinkNames.resize( mNumArmDofs );
+    mRightArmDofIds.resize( mNumArmDofs );
+    mRightArmConfig.resize( mNumArmDofs );
+
+    mRightArmLinkNames[0] = "Body_RSP"; mRightArmLinkNames[1] = "Body_RSR";
+    mRightArmLinkNames[2] = "Body_RSY"; mRightArmLinkNames[3] = "Body_REP";
+    mRightArmLinkNames[4] = "Body_RWY"; mRightArmLinkNames[5] = "Body_RWP";
+    
+
+    for( int i = 0; i < mNumArmDofs; ++i ) {
+      mRightArmDofIds[i] =  mSkel->getNode( mRightArmLinkNames[i].c_str() )->getDof(0)->getSkelIndex();
+    }
+    
+
+    // Load leg DOFs
+    mNumLegDofs = 6;
+
+    // Left Leg
+    mLeftLegLinkNames.resize( mNumLegDofs );
+    mLeftLegDofIds.resize( mNumLegDofs );
+    mLeftLegConfig.resize( mNumLegDofs );
+
+    mLeftLegLinkNames[0] = "Body_LHY"; mLeftLegLinkNames[1] = "Body_LHR";
+    mLeftLegLinkNames[2] = "Body_LHP"; mLeftLegLinkNames[3] = "Body_LKP";
+    mLeftLegLinkNames[4] = "Body_LAP"; mLeftLegLinkNames[5] = "Body_LAR";
+    
+
+    for( int i = 0; i < mNumLegDofs; ++i ) {
+      mLeftLegDofIds[i] =  mSkel->getNode( mLeftLegLinkNames[i].c_str() )->getDof(0)->getSkelIndex();
+    }
+    
+    // Right Leg
+    mRightLegLinkNames.resize( mNumLegDofs );
+    mRightLegDofIds.resize( mNumLegDofs );
+    mRightLegConfig.resize( mNumLegDofs );
+
+    mRightLegLinkNames[0] = "Body_RHY"; mRightLegLinkNames[1] = "Body_RHR";
+    mRightLegLinkNames[2] = "Body_RHP"; mRightLegLinkNames[3] = "Body_RKP";
+    mRightLegLinkNames[4] = "Body_RAP"; mRightLegLinkNames[5] = "Body_RAR";
+    
+
+    for( int i = 0; i < mNumLegDofs; ++i ) {
+      mRightLegDofIds[i] =  mSkel->getNode( mRightLegLinkNames[i].c_str() )->getDof(0)->getSkelIndex();
+    }
+
+}
 
 double Hubo_Tech::getTime() { return H_State.time; }
 
@@ -192,6 +272,9 @@ tech_flag_t Hubo_Tech::update(bool printError)
 
     ach_get( &chan_ctrl_state, &C_State, sizeof(C_State), &fs, NULL, ACH_O_LAST );
 
+    if(mSkel != NULL)
+        updateDartValues();
+
     if( r1==ACH_OK && r2==ACH_OK )
         return SUCCESS;
     else
@@ -203,6 +286,26 @@ tech_flag_t Hubo_Tech::update(bool printError)
         else
             return ALL_STALE;
     }
+}
+
+void Hubo_Tech::updateDartValues()
+{
+    Vector6d leftArmAngles, rightArmAngles;
+    Vector6d leftLegAngles, rightLegAngles;
+    // get arm angles
+    getArmAngles(LEFT, leftArmAngles);
+    leftArmAngles(1) -= -.3; 
+    getArmAngles(RIGHT, rightArmAngles);
+    rightArmAngles(1) -= .3; 
+    // get leg angles
+    getLegAngles(LEFT, leftLegAngles);
+    getLegAngles(RIGHT, rightLegAngles);
+    // set arm angles for COM calculation
+    mSkel->setConfig(mLeftArmDofIds, leftArmAngles);
+    mSkel->setConfig(mRightArmDofIds, rightArmAngles);
+    // set leg angles for COM calculation
+    mSkel->setConfig(mLeftLegDofIds, leftLegAngles);
+    mSkel->setConfig(mRightLegDofIds, rightLegAngles);
 }
 
 void Hubo_Tech::sendControls()
@@ -1719,6 +1822,7 @@ void Hubo_Tech::huboArmFK(Eigen::Isometry3d &B, Vector6d &q, int side,  const Ei
 //        offset(1) = -limits(1,1);
         
     } else {
+        // Transformation from Neck frame to left shoulder pitch frame
         neck(0,0) = 1; neck(0,1) =  0; neck(0,2) = 0; neck(0,3) =   0;
         neck(1,0) = 0; neck(1,1) =  0; neck(1,2) = 1; neck(1,3) =  l1;
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
@@ -1759,7 +1863,7 @@ void Hubo_Tech::huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     huboArmIK(q, B, qPrev, side, hand);
 }
   
-void Hubo_Tech::huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int side, const Eigen::Isometry3d &endEffector)
+void Hubo_Tech::huboArmIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev, int side, const Eigen::Isometry3d &endEffector)
 {
     Eigen::ArrayXXd qAll(6,8);
     
@@ -1794,6 +1898,7 @@ void Hubo_Tech::huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
         H_Arm_Ctrl[side].joint[5].pos_min, H_Arm_Ctrl[side].joint[5].pos_max;
 
     if (side == RIGHT) {
+        // Transformation from Neck frame to right shoulder pitch frame
         neck(0,0) = 1; neck(0,1) =  0; neck(0,2) = 0; neck(0,3) =   0;
         neck(1,0) = 0; neck(1,1) =  0; neck(1,2) = 1; neck(1,3) = -l1;
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
@@ -1811,6 +1916,7 @@ void Hubo_Tech::huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
         offset(1) = limits(1,1); 
         
     } else {
+        // Transformation from Neck frame to left shoulder pitch frame
         neck(0,0) = 1; neck(0,1) =  0; neck(0,2) = 0; neck(0,3) =   0;
         neck(1,0) = 0; neck(1,1) =  0; neck(1,2) = 1; neck(1,3) =  l1;
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
@@ -1834,7 +1940,6 @@ void Hubo_Tech::huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     double zeroSize = .000001;
     
     // Variables
-//    B = neckInv*B*endEffectorInv;
     BInv = (neckInv*B*endEffectorInv).inverse();
     
     nx = BInv(0,0); sx = BInv(0,1); ax = BInv(0,2); px = BInv(0,3);
@@ -2010,60 +2115,82 @@ void Hubo_Tech::huboArmIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     }
     // TODO: Find best solution using better method
 
-    bool withinLim[8];
     Eigen::ArrayXd qDiff(6,1); qDiff.setZero();
     Eigen::ArrayXd qDiffSum(8,1);
+    bool withinLim[8];
     int minInd;
 
+    // if any joint solution is infintesimal, set it to zero
+    for(int i=0; i<8; i++)
+        for(int j=0; j<6; j++)
+            if(qAll(j,i) < zeroSize && qAll(j,i) > -zeroSize)
+                qAll(j,i) = 0.0;
+
+    // Initialize withinLim to all trues for all eight solutions
     for(int i=0; i<8; i++)
         withinLim[i] = true;
 
+    // Check each set of solutions to see if any are outside the limits
     for(int i=0; i<8; i++)
         for(int j=0; j<6; j++)
             if( limits(j,0) > qAll(j,i) || qAll(j,i) > limits(j,1) )
                 withinLim[i] = false;
     
+    // Initialze anyWithin boolean array to all trues
     bool anyWithin=false;
     for(int i=0; i<8; i++)
         if( withinLim[i] )
             anyWithin = true;
 
+    // If any solution has all joints within the limits...
     if(anyWithin)
     {
+        // for each solution...
         for (int i = 0; i < 8; i++) {
+            // if all the joints of solution i are within the limits...
             if( withinLim[i] )
             {
+                // calculate the differences between solution angles, j, and previous angles
                 for (int j=0; j < 6; j++)
                     qDiff(j) = wrapToPi(qAll(j,i) - qPrev(j));
+                // sum the absolute values of the differences to get total difference
                 qDiffSum(i) = qDiff.abs().sum();
             }
+            // if the solution doesn't have all the joints within the limits...
             else
+                // set the difference for that solution to infinity
                 qDiffSum(i) = std::numeric_limits<double>::infinity();
         }
+        // and take the solution closest to previous solution
         qDiffSum.minCoeff(&minInd);
         q = qAll.col(minInd);
     }
+    // if no solution has all the joints within the limits...
     else
     {
+        // then for each solution...
         for( int i=0; i<8; i++)
         {
+            // create a 6d vector of angles of solution i
             Vector6d qtemp = qAll.col(i).matrix();
+            // take the min of the angles and the joint upper limits
             qtemp = qtemp.cwiseMin(limits.col(1));
+            // then take the max of those angles and the joint lower limits
             qtemp = qtemp.cwiseMax(limits.col(0));
-
+            // create an Isometry3d 4x4 matrix for the temp pose
             Eigen::Isometry3d Btemp;
+            // find the pose associated with the temp angles
             huboArmFK( Btemp, qtemp, side );
+            // calculate the distance from previous pose to temp pose locations
             qDiffSum(i) = (Btemp.translation() - B.translation()).norm();
         }
+        // find the solution that's closest the previous position
         qDiffSum.minCoeff(&minInd);
         q = qAll.col(minInd);
     }
-    
+    // set the final joint angles to the solution closest to the previous solution
     for( int i=0; i<6; i++ )
         q(i) = max( min( q(i), limits(i,1)), limits(i,0) );
-    
-    //q = q.cwiseMin(limits.col(1)); //TODO: Put these back
-    //q = q.cwiseMax(limits.col(0));
 }
 
 
@@ -2080,13 +2207,15 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
     double l4 = 300.03/1000.0;
     double l5 = 300.38/1000.0;
     double l6 = 94.97/1000.0;
-    
+
+    // Denavit-Hartenberg parameters 
     Vector6d t, f, r, d;
     t <<       0, -M_PI/2,       0,       0,       0,       0;
     f <<  M_PI/2, -M_PI/2,       0,       0,  M_PI/2,       0;
     r <<       0,       0,      l4,      l5,       0,      l6;
     d <<       0,       0,       0,       0,       0,       0;
     
+    // Transformation from Neck frame to Waist frame
     neck(0,0) = 1; neck(0,1) =  0; neck(0,2) = 0; neck(0,3) =   0;
     neck(1,0) = 0; neck(1,1) =  1; neck(1,2) = 0; neck(1,3) =   0;
     neck(2,0) = 0; neck(2,1) =  0; neck(2,2) = 1; neck(2,3) = -l1;
@@ -2101,15 +2230,16 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
         H_Leg_Ctrl[side].joint[5].pos_min, H_Leg_Ctrl[side].joint[5].pos_max;
 
     if (side == RIGHT) {
+        // Transformation from Waist frame to right hip yaw frame
         waist(0,0) = 0; waist(0,1) = -1; waist(0,2) = 0; waist(0,3) =   0;
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) = -l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
 /*        
                 limits <<
-                -1.30,   1.30,
-                -0.58,   0.0,
                 -1.80,   0.0,
+                -0.58,   0.0,
+                -1.30,   1.30,
                 0.0,     2.50,
                 -1.26,   1.80,
                 -0.23,   0.31;
@@ -2118,15 +2248,16 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
         //        offset(1) = limits(1,1);
         
     } else {
+        // Transformation from Waist frame to left hip yaw frame
         waist(0,0) = 0; waist(0,1) = -1; waist(0,2) = 0; waist(0,3) =   0;
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) =  l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
 /*        
                 limits <<
-                -1.30,   1.30,
-                0.0,     0.58,
                 0.0,     1.80,
+                0.0,     0.58,
+                -1.30,   1.30,
                 0.0,     2.50,
                 -1.26,   1.80,
                 -0.31,   0.23;
@@ -2143,7 +2274,7 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
     }
 }
 
-void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int side) {
+void Hubo_Tech::huboLegIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev, int side) {
     Eigen::ArrayXXd qAll(6,8);
     
     // Declarations
@@ -2167,7 +2298,8 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     double l4 = 300.03/1000.0;
     double l5 = 300.38/1000.0;
     double l6 = 94.97/1000.0;
-    
+
+    // Transformation from Neck frame to Waist frame
     neck(0,0) = 1; neck(0,1) =  0; neck(0,2) = 0; neck(0,3) =   0;
     neck(1,0) = 0; neck(1,1) =  1; neck(1,2) = 0; neck(1,3) =   0;
     neck(2,0) = 0; neck(2,1) =  0; neck(2,2) = 1; neck(2,3) = -l1;
@@ -2182,6 +2314,7 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
         H_Leg_Ctrl[side].joint[5].pos_min, H_Leg_Ctrl[side].joint[5].pos_max;
     
     if (side == RIGHT) {
+        // Transformation from Waist frame to right hip yaw frame
         waist(0,0) = 0; waist(0,1) = -1; waist(0,2) = 0; waist(0,3) =   0;
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) = -l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
@@ -2199,6 +2332,7 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
         //        offset(1) = limits(1,1);
         
     } else {
+        // Transformation from Waist frame to left hip yaw frame
         waist(0,0) = 0; waist(0,1) = -1; waist(0,2) = 0; waist(0,3) =   0;
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) =  l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
@@ -2218,8 +2352,7 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     waistInv = waist.inverse();
     
     // Variables
-    B = neckInv*waistInv*B;
-    BInv = B.inverse();
+    BInv = (neckInv*waistInv*B).inverse();
     
     nx = BInv(0,0); sx = BInv(0,1); ax = BInv(0,2); px = BInv(0,3);
     ny = BInv(1,0); sy = BInv(1,1); ay = BInv(1,2); py = BInv(1,3);
@@ -2235,18 +2368,22 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     -1, -1,  1,
     -1, -1, -1;
     
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++)
+    {
         C4 = ((l6 + px)*(l6 + px) - l4*l4 - l5*l5 + py*py + pz*pz)/(2*l4*l5);
-        q4 = atan2(m(i,0)*creal(sqrt(1-C4*C4)),C4);
+        double complex radical = 1-C4*C4;
+        q4 = atan2(m(i,0)*creal(csqrt(radical)),C4);
         
         S4 = sin(q4);
         psi = atan2(S4*l4, C4*l4+l5);
-        q5 = wrapToPi(atan2(-pz, m(i,1)*creal(sqrt((px+l6)*(px+l6)+py*py)))-psi);
+        radical = ((px+l6)*(px+l6)+(py*py));
+        q5 = wrapToPi(atan2(-pz, m(i,1)*creal(csqrt(radical)))-psi);
         
         q6 = atan2(py, -px-l6);
         C45 = cos(q4+q5);
         C5 = cos(q5);
-        if (C45*l4 + C5*l5 < 0) {
+        if (C45*l4 + C5*l5 < 0)
+        {
             q6 = wrapToPi(q6 + M_PI);
         }
         
@@ -2254,7 +2391,8 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
         C6 = cos(q6);
         
         S2 = C6*ay + S6*ax;
-        q2 = atan2(S2,m(i,2)*creal(sqrt(1-S2*S2)));
+        radical = 1-S2*S2;
+        q2 = atan2(S2,m(i,2)*creal(csqrt(radical)));
         
         q1 = atan2(C6*sy + S6*sx,C6*ny + S6*nx);
         C2 = cos(q2);
@@ -2285,19 +2423,85 @@ void Hubo_Tech::huboLegIK(Vector6d &q, Eigen::Isometry3d B, Vector6d qPrev, int 
     // Find best solution // TODO: Need to find a better way of choosing the best solution
     Eigen::ArrayXd qDiff(6,1); qDiff.setZero();
     Eigen::ArrayXd qDiffSum(8,1);
+    bool withinLim[8];
     int minInd;
-    
-    for (int i = 0; i < 8; i++) {
-        for (int j=0; j < 6; j++)
-            qDiff(j) = wrapToPi(qAll(j,i) - qPrev(j));
-        qDiffSum(i) = qDiff.abs().sum();
+    double zeroSize = 0.000001;
+
+    // if any joint solution is infintesimal, set it to zero
+    for(int i=0; i<8; i++)
+        for(int j=0; j<6; j++)
+            if(qAll(j,i) < zeroSize && qAll(j,i) > -zeroSize)
+                qAll(j,i) = 0.0;
+
+    // Initialize withinLim to all trues for all eight solutions
+    for(int i=0; i<8; i++)
+        withinLim[i] = true;
+
+    // Check each set of solutions to see if any are outside the limits
+    for(int i=0; i<8; i++)
+        for(int j=0; j<6; j++)
+            if( limits(j,0) > qAll(j,i) || qAll(j,i) > limits(j,1) )
+                withinLim[i] = false;
+
+    // Initialze anyWithin boolean array to all trues
+    bool anyWithin=false;
+    for(int i=0; i<8; i++)
+        if( withinLim[i] )
+            anyWithin = true;
+
+    // If any solution has all joints within the limits...
+    if(anyWithin)
+    {
+        // for each solution...
+        for (int i = 0; i < 8; i++)
+        {
+            // if all the joints of solution i are within the limits...
+            if( withinLim[i] )
+            {
+                // calculate the differences between solution angles, j, and previous angles
+                for (int j=0; j < 6; j++)
+                {
+                    qDiff(j) = wrapToPi(qAll(j,i) - qPrev(j));
+                }
+                // sum the absolute values of the differences to get total difference
+                qDiffSum(i) = qDiff.abs().sum();
+            }
+            // if the solution doesn't have all the joints within the limits...
+            else
+                // set the difference for that solution to infinity
+                qDiffSum(i) = std::numeric_limits<double>::infinity();
+        }
+        // and take the solution closest to previous solution
+        qDiffSum.minCoeff(&minInd);
+        q = qAll.col(minInd);
     }
-    qDiffSum.minCoeff(&minInd);
-    
-    q = qAll.col(minInd);
-    
-    //    q = q.cwiseMin(limits.col(1));
-    //    q = q.cwiseMax(limits.col(0));
+
+    // if no solution has all the joints within the limits...
+    else
+    {
+        // then for each solution...
+        for(int i=0; i<8; i++)
+        {
+            // create a 6d vector of angles of solution i
+            Vector6d qtemp = qAll.col(i).matrix();
+            // take the min of the angles and the joint upper limits
+            qtemp = qtemp.cwiseMin(limits.col(1));
+            // then take the max of those angles and the joint lower limits
+            qtemp = qtemp.cwiseMax(limits.col(0));
+            // create an Isometry3d 4x4 matrix for the temp pose
+            Eigen::Isometry3d Btemp;
+            // find the pose associated with the temp angles
+            huboLegFK( Btemp, qtemp, side );
+            // calculate the distance from previous pose to temp pose locations
+            qDiffSum(i) = (Btemp.translation() - B.translation()).norm();
+        }
+        // find the solution that's closest the previous position
+        qDiffSum.minCoeff(&minInd);
+        q = qAll.col(minInd);
+    }
+    // set the final joint angles to the solution closest to the previous solution
+    for( int i=0; i<6; i++)
+        q(i) = max( min( q(i), limits(i,1)), limits(i,0) ); 
 }
 
 tech_flag_t Hubo_Tech::hipVelocityIK( Vector6d &qdot, Eigen::Vector3d &velocity, int side, Vector6d qstate ) 
@@ -2441,156 +2645,46 @@ void Hubo_Tech::HuboDrillIK(Vector6d &q, double y) {
 }
 
 /**
- * @function initLocalCOMs
- */
-void Hubo_Tech::initLocalCOMs() {
-
-  // Leg
-  // Initialize the number of leg DOF
-  mLocalCOMs_Leg.resize(  mNumDofs_Leg ); 
-  // Fill the values from urdf
-  mLocalCOMs_Leg[0] << -0.0347, 0.000, 0.072;
-  mLocalCOMs_Leg[1] << 0.049747912596, 0.012531116599, 0.015643664572;
-  mLocalCOMs_Leg[2] << -0.019504891350, -0.059577480789, 0.175201757627;
-  mLocalCOMs_Leg[3] << -0.012825433376, -0.007275670525, 0.171431348038;
-  mLocalCOMs_Leg[4] << -0.019870246084, -0.045969255056, -0.011506941050;
-  mLocalCOMs_Leg[5] << 0.051509407797, 0.002163982128, 0.069388069491;
-
-  mMasses_Leg.resize( mNumDofs_Leg );
-  mMasses_Leg[0] = 0.826;  mMasses_Leg[1] = 1.932;
-  mMasses_Leg[2] =  2.82;  mMasses_Leg[3] = 1.809; 
-  mMasses_Leg[4] = 1.634;  mMasses_Leg[5] =  1.003;
-
-  mMass_Total_Leg = 0;
-  for( int i = 0; i < mMasses_Leg.size(); ++i ) {
-    mMass_Total_Leg += mMasses_Leg[i];
-  }
-  
-  // Arm
-  // Initialize the number of arm dofs
-  mLocalCOMs_Arm.resize( mNumDofs_Arm );
-  // Fill the values from urdf
-  mLocalCOMs_Arm[0] << -0.0347, 0.000, 0.072;
-  mLocalCOMs_Arm[1] << 0.049747912596, 0.012531116599, 0.015643664572;
-  mLocalCOMs_Arm[2] << -0.019504891350, -0.059577480789, 0.175201757627;
-  mLocalCOMs_Arm[3] << -0.012825433376, -0.007275670525, 0.171431348038;
-  mLocalCOMs_Arm[4] << -0.019870246084, -0.045969255056, -0.011506941050;
-  mLocalCOMs_Arm[5] << 0.051509407797, 0.002163982128, 0.069388069491;
-
-
-  mMasses_Arm.resize( mNumDofs_Arm );
-  mMasses_Arm[0] = 0.826; mMasses_Arm[1] = 1.932; 
-  mMasses_Arm[2] = 2.82; mMasses_Arm[3] = 1.809; 
-  mMasses_Arm[4] = 1.634; mMasses_Arm[5] = 1.003;
-
-  mMass_Total_Arm = 0;
-  for( int i = 0; i < mMasses_Arm.size(); ++i ) {
-    mMass_Total_Arm += mMasses_Arm[i];
-  }
-
-  
-  // Torso
-  // Initialize the number of torso dofs
-  mLocalCOMs_Torso.resize( mNumDofs_Torso );
-  // Fill the values from urdf
-  mMasses_Torso.resize( mNumDofs_Torso );
-
-}
-
-/**
  * @function getCOM_FUllBody
  */
 Eigen::Vector3d Hubo_Tech::getCOM_FullBody() {
-
-  Eigen::Vector3d COM_fullBody;
-
-  Eigen::Vector3d COM_rightArm;
-  Eigen::Vector3d COM_rightLeg;
-  Eigen::Vector3d COM_leftArm;
-  Eigen::Vector3d COM_leftLeg;
-
-  COM_rightArm = getCOM_Arm( RIGHT );
-  COM_leftArm = getCOM_Arm( LEFT );
-  COM_rightLeg = getCOM_Leg( RIGHT );
-  COM_leftLeg = getCOM_Leg( LEFT );
-
-  std::cout<< " * COM Right Arm: "<< COM_rightArm.transpose() << std::endl;
-  std::cout<< " * COM Left Arm: "<< COM_leftArm.transpose() << std::endl;
-  std::cout<< " * COM Right Leg: "<< COM_rightLeg.transpose() << std::endl;
-  std::cout<< " * COM Left Leg: "<< COM_rightLeg.transpose() << std::endl;
-
-  // Find the sum
-  COM_fullBody = ( COM_rightArm*mMass_Total_Arm + COM_leftArm*mMass_Total_Arm + COM_rightLeg*mMass_Total_Leg + COM_leftLeg*mMass_Total_Leg ) / ( 2*mMass_Total_Arm + 2*mMass_Total_Leg );
-
-
-  return COM_fullBody;
+    Eigen::Vector3d COM_fullBody;
+    Eigen::MatrixXd pCOM = Eigen::Matrix4d::Identity();
+ 
+    COM_fullBody = mSkel->getWorldCOM();
+    pCOM.block(0,3,3,1) = COM_fullBody;
+    Eigen::MatrixXd COMNeck;
+    COMNeck = mT_Neck2Torso * pCOM;
+    COM_fullBody = COMNeck.block(0,3,3,1); 
+    return COM_fullBody;
 }
 
 /**
- * @function getCOM_Arm
+ * @function loadURDFModel
+ * @brief Load a predefined URDF file
  */
-Eigen::Vector3d Hubo_Tech::getCOM_Arm( int _side ) {
+bool Hubo_Tech::loadURDFModel( std::string _urdfFilename ) {
 
-  Eigen:: Vector3d COM_arm;
-  Eigen::Isometry3d Dofs_arm;
-  Vector6d angles_arm;
-  Eigen::Vector3d sumMassPoses;
-  double sumMasses;
+    DartLoader dl;
+    mSkel = dl.parseSkeleton( _urdfFilename );
 
-  // Initialize mass - posses to 0
-  sumMassPoses << 0, 0, 0;
+    if( mSkel == NULL ) {
+        fprintf( stderr, "URDF Skeleton was not correctly parsed, you idiot! Verify the load path \n");   
+        return false;
+     } else {
+        fprintf( stderr, "Printing Skeleton Info \n" ); 
+        fprintf( stderr, "Num of DOFs: %d. Num Nodes: %d \n", mSkel->getNumDofs(), mSkel->getNumNodes() );
+        fprintf( stderr, "DOF Info \n");
+        
+        for( int i = 0; i < mSkel->getNumDofs(); ++i ) {
+            fprintf( stderr, "DOF [%d]: %s \n", i, mSkel->getDof(i)->getJoint()->getChildNode()->getName() );
+        }
+ 
+        initDartValues();  
+
+        return true;
+        }      
     
-  getArmAngles( _side, angles_arm );
-    
-  for (int i = 0; i < mNumDofs_Arm; i++) {
-    huboArmFK( Dofs_arm, angles_arm, _side );
-    sumMassPoses += Dofs_arm * mLocalCOMs_Arm[i] *mMasses_Arm[i];
-  }
-  
-  /** P = Sum(m*p) / Sum(m) */
-  COM_arm = sumMassPoses / mMass_Total_Arm; 
-  return COM_arm;
-
-}
-
-/**
- * @function getCOM_Leg
- */
-Eigen::Vector3d Hubo_Tech::getCOM_Leg( int _side ) {
-
-  Eigen:: Vector3d COM_leg;
-  Eigen::Isometry3d Dofs_leg;
-  Vector6d angles_leg;
-  Eigen::Vector3d sumMassPoses;
-  double sumMasses;
-
-  // Initialize mass - posses to 0
-  sumMassPoses << 0, 0, 0;
-    
-  getLegAngles( _side, angles_leg );
-    
-  for (int i = 0; i < mNumDofs_Leg; i++) {
-    huboLegFK( Dofs_leg, angles_leg, _side );
-    sumMassPoses += Dofs_leg * mLocalCOMs_Leg[i] *mMasses_Leg[i];
-  }
-  
-  /** P = Sum(m*p) / Sum(m) */
-  COM_leg = sumMassPoses / mMass_Total_Leg; 
-  return COM_leg;
-}
-
-/**
- * @function getCOM_Torso
- */
-Eigen::Vector3d Hubo_Tech::getCOM_Torso() {
-
-  Eigen:: Vector3d COM_torso;
-  Eigen::Isometry3d Dofs_leg;
-  Eigen::Vector3d sumMassPoses;
-  double sumMasses;
-
-
-  return COM_torso;
 }
 
 
