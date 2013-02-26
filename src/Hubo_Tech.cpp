@@ -1808,18 +1808,8 @@ void Hubo_Tech::huboArmFK(Eigen::Isometry3d &B, Vector6d &q, int side,  const Ei
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
         neck(3,0) = 0; neck(3,1) =  0; neck(3,2) = 0; neck(3,3) =   1;
         
-/*
-        limits <<
-        -2,   2,
-        -2,  .3,
-        -2,   2,
-        -2,   0.01,
-        -2,   2,
-        -1.4, 1.2;
-*/        
         // Set offsets
         offset(1) = limits(1,1); // Note: I think this might be backwards
-//        offset(1) = -limits(1,1);
         
     } else {
         // Transformation from Neck frame to left shoulder pitch frame
@@ -1827,18 +1817,9 @@ void Hubo_Tech::huboArmFK(Eigen::Isometry3d &B, Vector6d &q, int side,  const Ei
         neck(1,0) = 0; neck(1,1) =  0; neck(1,2) = 1; neck(1,3) =  l1;
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
         neck(3,0) = 0; neck(3,1) =  0; neck(3,2) = 0; neck(3,3) =   1;
-/*        
-        limits <<
-        -2,   2,
-        -.3,   2,
-        -2,   2,
-        -2,   0.01,
-        -2,   2,
-        -1.4, 1.2;
-*/        
+        
         // Set offsets
         offset(1) = limits(1,0); // Note: I think this might be backwards
-//        offset(1) = -limits(1,0);
     }
      
     // Calculate forward kinematics
@@ -1903,15 +1884,7 @@ void Hubo_Tech::huboArmIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev
         neck(1,0) = 0; neck(1,1) =  0; neck(1,2) = 1; neck(1,3) = -l1;
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
         neck(3,0) = 0; neck(3,1) =  0; neck(3,2) = 0; neck(3,3) =   1;
-/*
-        limits <<
-        -2,   2,
-        -2,  .3,
-        -2,   2,
-        -2,   0.01,
-        -2,   2,
-        -1.4, 1.2;
-*/
+
         // Set offsets
         offset(1) = limits(1,1); 
         
@@ -1921,15 +1894,7 @@ void Hubo_Tech::huboArmIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev
         neck(1,0) = 0; neck(1,1) =  0; neck(1,2) = 1; neck(1,3) =  l1;
         neck(2,0) = 0; neck(2,1) = -1; neck(2,2) = 0; neck(2,3) =   0;
         neck(3,0) = 0; neck(3,1) =  0; neck(3,2) = 0; neck(3,3) =   1;
-/*        
-        limits <<
-        -2,   2,
-        -.3,   2,
-        -2,   2,
-        -2,   0.01,
-        -2,   2,
-        -1.4, 1.2;
-*/        
+
         // Set offsets
         offset(1) = limits(1,0); 
     }
@@ -2235,17 +2200,6 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) = -l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
-/*        
-                limits <<
-                -1.80,   0.0,
-                -0.58,   0.0,
-                -1.30,   1.30,
-                0.0,     2.50,
-                -1.26,   1.80,
-                -0.23,   0.31;
-*/        
-        // Set offsets
-        //        offset(1) = limits(1,1);
         
     } else {
         // Transformation from Waist frame to left hip yaw frame
@@ -2253,17 +2207,6 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) =  l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
-/*        
-                limits <<
-                0.0,     1.80,
-                0.0,     0.58,
-                -1.30,   1.30,
-                0.0,     2.50,
-                -1.26,   1.80,
-                -0.31,   0.23;
-*/        
-        // Set offsets
-        //        offset(1) = limits(1,0);
     }
     
     // Calculate forward kinematics
@@ -2319,35 +2262,15 @@ void Hubo_Tech::huboLegIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) = -l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
-/*        
-                limits <<
-                -1.80,   0.0,
-                -0.58,   0.0,
-                -1.30,   1.30,
-                0.0,     2.50,
-                -1.26,   1.80,
-                -0.23,   0.31;
-*/        
-        // Set offsets
-        //        offset(1) = limits(1,1);
-        
+       
     } else {
         // Transformation from Waist frame to left hip yaw frame
         waist(0,0) = 0; waist(0,1) = -1; waist(0,2) = 0; waist(0,3) =   0;
         waist(1,0) = 1; waist(1,1) =  0; waist(1,2) = 0; waist(1,3) =  l2;
         waist(2,0) = 0; waist(2,1) =  0; waist(2,2) = 1; waist(2,3) = -l3;
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
-/*        
-                limits <<
-                0.0,     1.80,
-                0.0,     0.58,
-                -1.30,   1.30,
-                0.0,     2.50,
-                -1.26,   1.80,
-                -0.31,   0.23;
-*/        // Set offsets
-        //        offset(1) = limits(1,0);
     }
+
     neckInv = neck.inverse();
     waistInv = waist.inverse();
     
