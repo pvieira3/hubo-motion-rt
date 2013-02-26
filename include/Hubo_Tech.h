@@ -71,8 +71,8 @@ extern "C" {
 
 typedef Eigen::Matrix< double, 6, 1 > Vector6d;
 typedef Eigen::Vector3d Vector3d;
-Eigen::MatrixXd mT_Torso2Neck;
-Eigen::MatrixXd mT_Neck2Torso;
+Eigen::Isometry3d mT_Torso2Neck;
+Eigen::Isometry3d mT_Neck2Torso;
 
 #define CtrlNE  0
 #define CtrlRA  1

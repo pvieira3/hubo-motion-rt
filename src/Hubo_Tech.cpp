@@ -183,7 +183,7 @@ void Hubo_Tech::initDartValues()
 {
     printf("initing\n");
     // Torso to Neck transformation
-    mT_Torso2Neck = Eigen::MatrixXd::Identity(4,4);
+    mT_Torso2Neck = Eigen::Matrix4d::Identity();
     mT_Torso2Neck(0,3) = 0.012258;
     mT_Torso2Neck(2,3) = 0.0486356; 
     mT_Neck2Torso = mT_Torso2Neck.inverse();
@@ -2572,14 +2572,32 @@ void Hubo_Tech::HuboDrillIK(Vector6d &q, double y) {
  */
 Eigen::Vector3d Hubo_Tech::getCOM_FullBody() {
     Eigen::Vector3d COM_fullBody;
-    Eigen::MatrixXd pCOM = Eigen::Matrix4d::Identity();
- 
+    Eigen::Isometry3d Torso2COM;
+    Eigen::Isometry3d ltFootTF, rtFootTF, balancePtTF, balPt2COM, Neck2COM;
+    Vector6d ltLegAngles, rtLegAngles;
+
+    // get leg angles
+    getLegAngles(LEFT, ltLegAngles);
+    getLegAngles(RIGHT, rtLegAngles);
+
+    // get foot TFs
+    huboLegFK(ltFootTF, ltLegAngles, LEFT);
+    huboLegFK(rtFootTF, rtLegAngles, RIGHT);
+
+    // get balance point TF from neck
+    balancePtTF = Eigen::Matrix4d::Identity();
+    Torso2COM = Eigen::Matrix4d::Identity();
+    balancePtTF.rotate((ltFootTF.rotation()));
+//    COM_fullBody = (ltFootTF.translation() + rtFootTF.translation()) / 1;
+    balancePtTF.translate((ltFootTF.translation() + rtFootTF.translation()) / 2);
     COM_fullBody = mSkel->getWorldCOM();
-    pCOM.block(0,3,3,1) = COM_fullBody;
-    Eigen::MatrixXd COMNeck;
-    COMNeck = mT_Neck2Torso * pCOM;
-    COM_fullBody = COMNeck.block(0,3,3,1); 
-    return COM_fullBody;
+    Torso2COM.translation() = COM_fullBody;
+//    Eigen::MatrixXd COMNeck;
+//    COMNeck = mT_Neck2Torso * pCOM;
+    Neck2COM = mT_Neck2Torso * Torso2COM;
+    balPt2COM = balancePtTF.inverse() * Neck2COM;
+//    COM_fullBody = COMNeck.block(0,3,3,1);
+    return balPt2COM.translation();
 }
 
 /**
