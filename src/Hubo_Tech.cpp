@@ -181,7 +181,6 @@ void Hubo_Tech::techInit()
 
 void Hubo_Tech::initDartValues()
 {
-    printf("initing\n");
     // Torso to Neck transformation
     mT_Torso2Neck = Eigen::Matrix4d::Identity();
     mT_Torso2Neck(0,3) = 0.012258;
@@ -306,6 +305,15 @@ void Hubo_Tech::updateDartValues()
     // set leg angles for COM calculation
     mSkel->setConfig(mLeftLegDofIds, leftLegAngles);
     mSkel->setConfig(mRightLegDofIds, rightLegAngles);
+    
+
+    Eigen::Isometry3d ltFootTF;
+    huboLegFK(ltFootTF, leftLegAngles, LEFT);
+
+    Eigen::MatrixXd TTorsoToFoot = mSkel->getNode("Body_LAP")->getWorldTransform();
+    Eigen::MatrixXd TFootToTorso = TTorsoToFoot.inverse();
+//    std::cout << "torso loc. w.r.t. left foot=" << TFootToTorso.block(0,3,3,1).transpose() << std::endl;
+//    std::cout << "TORSO LOC WRT LEFT FOOTDDDD=" << ltFootTF.inverse().translation().transpose() << std::endl;
 }
 
 void Hubo_Tech::sendControls()
@@ -2161,7 +2169,7 @@ void Hubo_Tech::huboArmIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev
 
 void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
     // Declarations
-    Eigen::Isometry3d neck, waist, T;
+    Eigen::Isometry3d neck, waist, T, foot;
     Eigen::MatrixXd limits(6,2);
     Vector6d offset; offset.setZero();
     
@@ -2214,6 +2222,12 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
     for (int i = 0; i < 6; i++) {
         DH2HG(T, t(i)+q(i)+offset(i), f(i), r(i), d(i));
         B = B*T;
+    foot(0,0) = 0; foot(0,1) =  0; foot(0,2) =-1; foot(0,3) = 0;
+    foot(1,0) = 0; foot(1,1) =  1; foot(1,2) = 0; foot(1,3) = 0;
+    foot(2,0) = 1; foot(2,1) =  0; foot(2,2) = 0; foot(2,3) = 0;
+    foot(3,0) = 0; foot(3,1) =  0; foot(3,2) = 0; foot(3,3) = 1;
+
+    B = B*foot;
     }
 }
 
@@ -2221,7 +2235,7 @@ void Hubo_Tech::huboLegIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev
     Eigen::ArrayXXd qAll(6,8);
     
     // Declarations
-    Eigen::Isometry3d neck, neckInv, waist, waistInv, BInv;
+    Eigen::Isometry3d neck, neckInv, waist, waistInv, BInv, foot, footInv;
     Eigen::MatrixXd limits(6,2);
     Vector6d offset; offset.setZero();
     double nx, sx, ax, px;
@@ -2271,11 +2285,17 @@ void Hubo_Tech::huboLegIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev
         waist(3,0) = 0; waist(3,1) =  0; waist(3,2) = 0; waist(3,3) =   1;
     }
 
+    foot(0,0) = 0; foot(0,1) =  0; foot(0,2) =-1; foot(0,3) = 0;
+    foot(1,0) = 0; foot(1,1) =  1; foot(1,2) = 0; foot(1,3) = 0;
+    foot(2,0) = 1; foot(2,1) =  0; foot(2,2) = 0; foot(2,3) = 0;
+    foot(3,0) = 0; foot(3,1) =  0; foot(3,2) = 0; foot(3,3) = 1;
+
+    footInv = foot.inverse();
     neckInv = neck.inverse();
     waistInv = waist.inverse();
     
     // Variables
-    BInv = (neckInv*waistInv*B).inverse();
+    BInv = (neckInv*waistInv*B*footInv).inverse();
     
     nx = BInv(0,0); sx = BInv(0,1); ax = BInv(0,2); px = BInv(0,3);
     ny = BInv(1,0); sy = BInv(1,1); ay = BInv(1,2); py = BInv(1,3);
@@ -2572,32 +2592,15 @@ void Hubo_Tech::HuboDrillIK(Vector6d &q, double y) {
  */
 Eigen::Vector3d Hubo_Tech::getCOM_FullBody() {
     Eigen::Vector3d COM_fullBody;
-    Eigen::Isometry3d Torso2COM;
-    Eigen::Isometry3d ltFootTF, rtFootTF, balancePtTF, balPt2COM, Neck2COM;
+    Eigen::Isometry3d Torso2COM, Neck2COM;
+    Eigen::Isometry3d ltFootTF, rtFootTF;
     Vector6d ltLegAngles, rtLegAngles;
 
-    // get leg angles
-    getLegAngles(LEFT, ltLegAngles);
-    getLegAngles(RIGHT, rtLegAngles);
-
-    // get foot TFs
-    huboLegFK(ltFootTF, ltLegAngles, LEFT);
-    huboLegFK(rtFootTF, rtLegAngles, RIGHT);
-
-    // get balance point TF from neck
-    balancePtTF = Eigen::Matrix4d::Identity();
     Torso2COM = Eigen::Matrix4d::Identity();
-    balancePtTF.rotate((ltFootTF.rotation()));
-//    COM_fullBody = (ltFootTF.translation() + rtFootTF.translation()) / 1;
-    balancePtTF.translate((ltFootTF.translation() + rtFootTF.translation()) / 2);
     COM_fullBody = mSkel->getWorldCOM();
     Torso2COM.translation() = COM_fullBody;
-//    Eigen::MatrixXd COMNeck;
-//    COMNeck = mT_Neck2Torso * pCOM;
     Neck2COM = mT_Neck2Torso * Torso2COM;
-    balPt2COM = balancePtTF.inverse() * Neck2COM;
-//    COM_fullBody = COMNeck.block(0,3,3,1);
-    return balPt2COM.translation();
+    return Neck2COM.translation();
 }
 
 /**
@@ -2617,9 +2620,9 @@ bool Hubo_Tech::loadURDFModel( std::string _urdfFilename ) {
         fprintf( stderr, "Num of DOFs: %d. Num Nodes: %d \n", mSkel->getNumDofs(), mSkel->getNumNodes() );
         fprintf( stderr, "DOF Info \n");
         
-        for( int i = 0; i < mSkel->getNumDofs(); ++i ) {
-            fprintf( stderr, "DOF [%d]: %s \n", i, mSkel->getDof(i)->getJoint()->getChildNode()->getName() );
-        }
+//        for( int i = 0; i < mSkel->getNumDofs(); ++i ) {
+//            fprintf( stderr, "DOF [%d]: %s \n", i, mSkel->getDof(i)->getJoint()->getChildNode()->getName() );
+//        }
  
         initDartValues();  
 

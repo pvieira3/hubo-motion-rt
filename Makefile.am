@@ -66,7 +66,7 @@ dynamics_HEADERS = src/dart_Lite/src/dynamics/BodyNodeDynamics.h src/dart_Lite/s
 
 include_HEADERS = include/Hubo_Tech.h include/control-daemon.h include/daemonizer.h include/manip.h
 
-bin_PROGRAMS = control-daemon tech-console proto-manip-daemon
+bin_PROGRAMS = control-daemon tech-console proto-manip-daemon oneLeg moveLimbs
 
 hubotechconfdir=/etc/hubo-ach
 hubotechconf_DATA = tables/control.table
@@ -80,6 +80,11 @@ tech_console_LDADD = -lm -lach -lreadline libhubotech.la libdaemonizer.la libdar
 proto_manip_daemon_SOURCES = src/proto-manip-daemon.cpp
 proto_manip_daemon_LDADD = -lm -lach libhubotech.la libdaemonizer.la libdartlite.la -lhuboparams
 
+oneLeg_SOURCES = ../../hubo-misc/test-code/src/oneLeg.cpp
+oneLeg_LDADD = -lm -lach libhubotech.la libdaemonizer.la libdartlite.la -lhuboparams
+
+moveLimbs_SOURCES = ../../hubo-misc/test-code/src/moveLimbs.cpp
+moveLimbs_LDADD = -lm -lach libhubotech.la libdaemonizer.la libdartlite.la -lhuboparams
 
 hubo_techdir = /usr/lib
 hubo_tech_LTLIBRARIES = libhubotech.la libdaemonizer.la libdartlite.la
