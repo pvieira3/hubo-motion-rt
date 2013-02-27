@@ -2222,13 +2222,13 @@ void Hubo_Tech::huboLegFK(Eigen::Isometry3d &B, Vector6d &q, int side) {
     for (int i = 0; i < 6; i++) {
         DH2HG(T, t(i)+q(i)+offset(i), f(i), r(i), d(i));
         B = B*T;
+    }
     foot(0,0) = 0; foot(0,1) =  0; foot(0,2) =-1; foot(0,3) = 0;
     foot(1,0) = 0; foot(1,1) =  1; foot(1,2) = 0; foot(1,3) = 0;
     foot(2,0) = 1; foot(2,1) =  0; foot(2,2) = 0; foot(2,3) = 0;
     foot(3,0) = 0; foot(3,1) =  0; foot(3,2) = 0; foot(3,3) = 1;
 
     B = B*foot;
-    }
 }
 
 void Hubo_Tech::huboLegIK(Vector6d &q, const Eigen::Isometry3d B, Vector6d qPrev, int side) {
@@ -2590,18 +2590,25 @@ void Hubo_Tech::HuboDrillIK(Vector6d &q, double y) {
 /**
  * @function getCOM_FUllBody
  */
-Eigen::Vector3d Hubo_Tech::getCOM_FullBody() {
-    Eigen::Vector3d COM_fullBody;
+Eigen::Isometry3d Hubo_Tech::getCOM_FullBody() {
     Eigen::Isometry3d Torso2COM, Neck2COM;
+    Torso2COM = getCOM_wrtTorso();
+    Neck2COM = mT_Neck2Torso * Torso2COM;
+    return Neck2COM;
+}
+
+Eigen::Isometry3d Hubo_Tech::getCOM_wrtTorso() {
+    Eigen::Vector3d COM_fullBody;
+    Eigen::Isometry3d Torso2COM;
     Eigen::Isometry3d ltFootTF, rtFootTF;
     Vector6d ltLegAngles, rtLegAngles;
 
     Torso2COM = Eigen::Matrix4d::Identity();
     COM_fullBody = mSkel->getWorldCOM();
     Torso2COM.translation() = COM_fullBody;
-    Neck2COM = mT_Neck2Torso * Torso2COM;
-    return Neck2COM.translation();
+    return Torso2COM;
 }
+
 
 /**
  * @function loadURDFModel

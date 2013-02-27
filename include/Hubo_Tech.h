@@ -886,7 +886,8 @@ public:
     /**
      * Still experimental. PLEASE DO NOT USE.
     */
-    Eigen::Vector3d getCOM_FullBody();
+    Eigen::Isometry3d getCOM_FullBody();
+    Eigen::Isometry3d getCOM_wrtTorso();
     /**
      * Loading function
      */
