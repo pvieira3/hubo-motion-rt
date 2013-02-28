@@ -255,19 +255,30 @@ void Hubo_Tech::initDartValues()
 
 double Hubo_Tech::getTime() { return H_State.time; }
 
-tech_flag_t Hubo_Tech::update(bool printError)
+tech_flag_t Hubo_Tech::update(bool stateWait, bool printError)
 {
     int r1, r2;
     size_t fs;
+
+    if( !stateWait )
+    {
+        r2 = ach_get( &chan_hubo_state, &H_State, sizeof(H_State), &fs, NULL, ACH_O_LAST );
+        if( ACH_OK != r2 && printError )
+            fprintf( stdout, "Ach report -- State Channel: %s at time=%f",
+                ach_result_to_string((ach_status_t)r2), getTime() );
+    }
+    else
+    {
+        r2 = ach_get( &chan_hubo_state, &H_State, sizeof(H_State), &fs, NULL, ACH_O_WAIT );
+        if( ACH_OK != r2 && printError )
+            fprintf( stdout, "Ach report -- State Channel: %s at time=%f",
+                ach_result_to_string((ach_status_t)r2), getTime() );
+    }
+    
     r1 = ach_get( &chan_hubo_ref, &H_Ref, sizeof(H_Ref), &fs, NULL, ACH_O_LAST );
     if( ACH_OK != r1 && printError )
         fprintf( stdout, "Ach report -- Ref Channel: %s at time=%f",
             ach_result_to_string((ach_status_t)r1), getTime() );
-
-    r2 = ach_get( &chan_hubo_state, &H_State, sizeof(H_State), &fs, NULL, ACH_O_LAST );
-    if( ACH_OK != r2 && printError )
-        fprintf( stdout, "Ach report -- State Channel: %s at time=%f",
-            ach_result_to_string((ach_status_t)r2), getTime() );
 
     ach_get( &chan_ctrl_state, &C_State, sizeof(C_State), &fs, NULL, ACH_O_LAST );
 
@@ -1410,8 +1421,20 @@ double Hubo_Tech::getFz(hubo_sensor_index_t sensor)
     else
         return 0;
 }
-double Hubo_Tech::getRightFootFz() { getFz(HUBO_FT_R_FOOT); }
-double Hubo_Tech::getLeftFootFz()  { getFz(HUBO_FT_L_FOOT); }
+double Hubo_Tech::getRightFootFz( bool calibrated )
+{
+    if( calibrated )    
+        return getFz(HUBO_FT_R_FOOT) + afc[RIGHT];
+    else
+        return getFz(HUBO_FT_R_FOOT);
+}
+double Hubo_Tech::getLeftFootFz( bool calibrated )
+{
+    if( calibrated )
+        return getFz(HUBO_FT_L_FOOT) + afc[LEFT];
+    else
+        return getFz(HUBO_FT_L_FOOT);
+}
 
 
 // ~* Accelerometers
@@ -2536,6 +2559,12 @@ void Hubo_Tech::calibrateAnkle( int side )
         apc[LEFT] = getJointAngleState( LAP );
         arc[LEFT] = getJointAngleState( LAR );
     }
+}
+
+void Hubo_Tech::calibrateAnkleForces()
+{
+    afc[RIGHT] = (getRightFootFz()+getLeftFootFz())/2.0 - getRightFootFz();
+    afc[LEFT]  = (getRightFootFz()+getLeftFootFz())/2.0 - getLeftFootFz();
 }
 
 void Hubo_Tech::HuboDrillFK(Eigen::Isometry3d &B, Vector6d &q) {

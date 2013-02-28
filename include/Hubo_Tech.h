@@ -119,8 +119,6 @@ typedef enum {
 } tech_flag_t;
 
 
-
-
 class Hubo_Tech
 {
 public:
@@ -152,10 +150,7 @@ public:
      * \li Joint reference (encoder value);
     */
     /// Retrieves the latest data from the state and ref channels
-    tech_flag_t update(bool printError=false);   
-                    // Returns true if successful
-                    // Returns false if both channels are not ACH_OK
-    // TODO: Consider making the update return more meaningful
+    tech_flag_t update(bool stateWait=false, bool printError=false);   
 
 
     // ~~~*** Sending Control Commands ***~~~ //
@@ -705,11 +700,11 @@ public:
     /**
      * Extension of getFz() where sensor = HUBO_FT_R_FOOT
     */
-    double getRightFootFz();
+    double getRightFootFz( bool calibrated=false );
     /**
      * Extension of getFz() where sensor = HUBO_FT_L_FOOT
     */
-    double getLeftFootFz();
+    double getLeftFootFz( bool calibrated=false );
     // ~* Accelerometers
     // Tilt X
     /**
@@ -865,6 +860,10 @@ public:
     */
     void calibrateAnkle( int side );
     /**
+     * Calibration to get consistent force readings between the ankle FT sensors
+    */
+    void calibrateAnkleForces();
+    /**
      * A specialized Forward Kinematics calculation which accounts for the end effector
      * transformation of our experimental drill.
     */
@@ -909,6 +908,7 @@ protected:
 
     double apc[2]; // Ankle Pitch Calibration
     double arc[2]; // Ankle Roll Calibration
+    double afc[2]; // Ankle Force Calibration
 
     ach_channel_t chan_hubo_ref;
     ach_channel_t chan_hubo_board_cmd;
