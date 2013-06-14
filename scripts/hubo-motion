@@ -54,7 +54,7 @@ HUBO_BAL_CMD_CHAN='balance-cmd'
 HUBO_BAL_STATE_CHAN='balance-state'
 HUBO_BAL_PARAM_CHAN='balance-param'
 LIBERTY_CHAN='liberty'
-
+HUBO_WALKER_STATE_CHAN='walker-state'
 DAEMON_DIR='/etc/hubo-daemon'
 DAEMON_LOG_DIR='/var/log/hubo'
 LOCK_DIR='/var/lock/hubo'
@@ -99,6 +99,7 @@ Ach()
         sudo ach -U $HUBO_BAL_CMD_CHAN
         sudo ach -U $HUBO_BAL_STATE_CHAN
         sudo ach -U $HUBO_BAL_PARAM_CHAN
+        sudo ach -U $HUBO_WALKER_STATE_CHAN
 
 	;;	
 
@@ -128,6 +129,7 @@ Ach()
         sudo ach -1 -C $HUBO_BAL_CMD_CHAN       -m 10 -n 3000 -o 666
         sudo ach -1 -C $HUBO_BAL_STATE_CHAN     -m 10 -n 3000 -o 666
         sudo ach -1 -C $HUBO_BAL_PARAM_CHAN     -m 10 -n 3000 -o 666
+        sudo ach -1 -C $HUBO_WALKER_STATE_CHAN  -m 10 -n 3000 -o 666
         
 	;;
 	esac
