@@ -1,6 +1,3 @@
-#ifndef _HUBO_ZMP_H_
-#define _HUBO_ZMP_H_
-
 /**
  * \file hubo-zmp.h
  * \brief Header containing enumerations, structs and 
@@ -12,11 +9,19 @@
  * \author M.X. Grey
 */
 
+#ifndef _HUBO_ZMP_H_
+#define _HUBO_ZMP_H_
+
 #include <stdlib.h>
 #include <vector>
 #include "stdint.h"
-
 #include <hubo.h> //!< hubo main include
+
+/// Ach channel name for zmp trajectory
+#define HUBO_CHAN_ZMP_TRAJ_NAME "hubo-zmp-traj"
+
+/// Ach channel name for walker state
+#define HUBO_CHAN_WALKER_STATE_NAME "walker-state"
 
 /**
  * \brief Current stance. The first four are set for each
@@ -30,6 +35,10 @@ enum stance_t {
   SINGLE_RIGHT = 3, //!< single support stance, right dominant
 };
 
+/**
+ * \brief Different stance types for atomic trajectories, used
+ * for all walk types.
+*/
 enum stepStance_t {
   EVEN,             //!< feet are even and normal width
   LEFT_DOM,         //!< left foot is dominant or in front
@@ -37,6 +46,7 @@ enum stepStance_t {
   NUM_OF_STANCES = 3//!< number of stance types. used for 3D trajectory array
 };
 
+/// String constants for stepStance enum
 static const char* stepStanceStrings[NUM_OF_STANCES] = {"EVEN",
                                                         "LEFT_DOM",
                                                         "RIGHT_DOM"};
@@ -57,6 +67,7 @@ enum walkState_t {
   NUM_OF_WALKSTATES = 6 //!< number of walk states to get trajectories for
 };
 
+/// String constants for walkState enum
 static const char* walkStateStrings[NUM_OF_WALKSTATES+2] = {"WALKING_FORWARD", "WALKING_BACKWARD", 
                                                         "ROTATING_LEFT", "ROTATING_RIGHT",
                                                         "SIDESTEPPING_LEFT", "SIDESTEPPING_RIGHT",
@@ -77,9 +88,10 @@ typedef struct zmp_traj_element {
   double zmp[2];        //!< XY position of zmp in frame of stance ankle
   double forces[2][3];  //!< right/left predicted normal forces at ankles
   double torque[2][3];  //!< right/left predicted moments XYZ at ankles
-  // TODO: add orientation for IMU
   stance_t stance;      //!< current stance of robot
+  // TODO: add orientation for IMU
 } zmp_traj_element_t;
+//}__attribute__((packed)) zmp_traj_element_t;
 
 /**
  * \brief Struct containing entire zmp trajectory, including joint configuration
@@ -90,54 +102,26 @@ typedef struct zmp_traj {
   size_t count;             //!< size of first step trajectory in timesteps
   size_t end;               //!< size of two-step trajectory ending in EVEN stance
   size_t trajNumber;        //!< trajectory number
+  size_t periodStartTick;   //!< start timestep of periodic portion of trajectory
+  size_t periodEndTick;     //!< end timestep of periodic portion of trajectory
   walkState_t walkDirection;//!< walk direction for trajectory
-  stepStance_t startStance;     //!< start stance for trajectory
-  stepStance_t goalStance;      //!< goal stance for trajectory
-  size_t periodStartTick;
-  size_t periodEndTick;
-  bool reuse;
+  stepStance_t startStance; //!< start stance for trajectory
+  stepStance_t goalStance;  //!< goal stance for trajectory
+  bool reuse;               //!< whether or not to reuse the current trajectory's periodic portion
 } zmp_traj_t;
+//}__attribute__((packed)) zmp_traj_t;
 
 /**
  * \brief Struct containing walker state information so the zmp-daemon knows what
  * the walker is doing and what trajectories to send next
 */
 typedef struct walker_state {
-  walkState_t walkDirection;//!< walk direction being executed
+  walkState_t walkDirection;    //!< walk direction being executed
   stepStance_t startStance;     //!< start stance of current step
   stepStance_t goalStance;      //!< goal stance of current step
-  int cyclesLeft;           //!< cycles left in current step trajectory
+  int cyclesLeft;               //!< cycles left in current step trajectory
 } walker_state_t;
-
-/*
-typedef struct zmp_traj_element {
-  uint64_t angles[HUBO_JOINT_COUNT];
-  // XYZ pos/vel/accel in frame of stance ANKLE
-  // (translated up ~10cm from foot -- i.e. z coord is 10cm less)
-  uint64_t com[3][3];
-  uint64_t zmp[2]; // XY of zmp in frame of stance ANKLE
-  uint64_t forces[2][3]; // right/left predicted normal forces
-  uint64_t torque[2][3]; // right/left predicted moments XYZ
-  // TODO: add orientation for IMU
-  stance_t stance;
-} zmp_traj_element_t;
-
-typedef struct zmp_traj {
-  zmp_traj_element_t traj[MAX_TRAJ_SIZE];
-  uint16_t count;
-  uint16_t trajNumber;
-  uint16_t startTick;
-  walkState_t walkState;
-  walkTransition_t walkTransition;
-} zmp_traj_t;
-*/
-
-/// Ach channel name for zmp trajectory
-#define HUBO_CHAN_ZMP_TRAJ_NAME "hubo-zmp-traj"
-
-/// Ach channel name for walker state
-#define HUBO_CHAN_WALKER_STATE_NAME "walker-state"
-
-#endif
+//}__attribute__((packed)) walker_state_t;
 
 
+#endif // _HUBO_ZMP_H_
