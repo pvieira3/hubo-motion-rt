@@ -103,10 +103,10 @@ typedef struct zmp_traj {
  * the walker is doing and what trajectories to send next
 */
 typedef struct walker_state {
-  walkState_t walkDirection;//!< walk direction being executed
+  walkState_t walkDirection;    //!< walk direction being executed
   stepStance_t startStance;     //!< start stance of current step
   stepStance_t goalStance;      //!< goal stance of current step
-  int cyclesLeft;           //!< cycles left in current step trajectory
+  int cyclesLeft;               //!< whether or not walker is ready for next trajectory
 } walker_state_t;
 
 /*
