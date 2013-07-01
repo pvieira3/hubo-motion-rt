@@ -129,7 +129,31 @@ void Walker::complyKnee( Hubo_Control &hubo, zmp_traj_element_t &elem,
     elem.angles[RHP] += -state.knee_offset[RIGHT]/2.0;
 }
 
+void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
+        nudge_state_t &state, balance_gains_t &gains, double dt)
+{
+    if( elem.stance == SINGLE_LEFT )
+    {
+        state.ankle_pitch_resistance[LEFT] += dt*gains.straightening_pitch_gain[LEFT]
+                                                *( hubo.getLeftFootMy() );
+        state.ankle_roll_resistance[LEFT]  += dt*gains.straightening_roll_gain[LEFT]
+                                                *( hubo.getLeftFootMx() );
+    }
 
+    if( elem.stance == SINGLE_RIGHT )
+    {
+        state.ankle_pitch_resistance[RIGHT] += dt*gains.straightening_pitch_gain[RIGHT]
+                                                 *( hubo.getRightFootMy() );
+        state.ankle_roll_resistance[RIGHT]  += dt*gains.straightening_roll_gain[RIGHT]
+                                                 *( hubo.getRightFootMx() );
+    }
+    
+    elem.angles[RAR] += state.ankle_roll_resistance[RIGHT];
+    elem.angles[RAP] += state.ankle_pitch_resistance[RIGHT];
+    elem.angles[LAR] += state.ankle_roll_resistance[LEFT];
+    elem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
+
+}
 
 Walker::Walker(double maxInitTime, double jointSpaceTolerance, double jointVelContinuityTolerance) :
         m_maxInitTime(maxInitTime),
@@ -457,6 +481,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
+    //balanceAboveFoot( hubo, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 

@@ -195,6 +195,21 @@ protected:
         nudge_state_t &state, balance_gains_t &gains, double dt );
 
     /**
+     * \brief Balance above the stance foot using the the force/torque
+     * sensors to equalibriate to the desired torque when in single
+     * support by driving the ankle torque to zero.
+     * \param hubo Hubo_Control object to get state info from
+     * \param elem ZMP trajectory element we are currently executing
+     * \param state Nudge state which stores the integrated knee offset
+       state.
+     * \param gains Knee gain values for balancing
+     * \param dt Time change between last update and current update
+     * \return void
+    */
+    void balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
+        nudge_state_t &state, balance_gains_t &gains, double dt );
+
+    /**
      * \brief Send balance state, which include balance mode, walk
      * mode and walk errors.
      * \return void
@@ -207,14 +222,6 @@ protected:
     */
     void checkCommands();
 
-
-
-
-
-
 };
 
-
-
 #endif // WALKER_H
-
