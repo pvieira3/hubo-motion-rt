@@ -128,10 +128,20 @@ void Walker::complyKnee( Hubo_Control &hubo, zmp_traj_element_t &elem,
     elem.angles[RKN] += state.knee_offset[RIGHT];
     elem.angles[RHP] += -state.knee_offset[RIGHT]/2.0;
 }
-
+//FIXME
 void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
         nudge_state_t &state, balance_gains_t &gains, double dt)
 {
+    // Reduce resistance terms with decay gain
+    state.ankle_roll_resistance[LEFT] -= gains.decay_gain[LEFT]*state.ankle_roll_resistance[LEFT];
+    state.ankle_roll_resistance[RIGHT] -= gains.decay_gain[RIGHT]*state.ankle_roll_resistance[RIGHT];
+
+    state.ankle_pitch_resistance[LEFT] -= gains.decay_gain[LEFT]*state.ankle_pitch_resistance[LEFT];
+    state.ankle_pitch_resistance[RIGHT] -= gains.decay_gain[RIGHT]*state.ankle_pitch_resistance[RIGHT];
+
+
+    // If we're in single-support stance then adjust joint angles using PD controller
+    // to bring torque in ankles to desired torque in trajectory
     if( elem.stance == SINGLE_LEFT )
     {
         state.ankle_pitch_resistance[LEFT] += dt*gains.straightening_pitch_gain[LEFT]
@@ -147,11 +157,18 @@ void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
         state.ankle_roll_resistance[RIGHT]  += dt*gains.straightening_roll_gain[RIGHT]
                                                  *( hubo.getRightFootMx() );
     }
-    
-    elem.angles[RAR] += state.ankle_roll_resistance[RIGHT];
-    elem.angles[RAP] += state.ankle_pitch_resistance[RIGHT];
-    elem.angles[LAR] += state.ankle_roll_resistance[LEFT];
-    elem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
+
+    std::cout << "\n"
+              << "\nAR Res Rt: " << state.ankle_roll_resistance[RIGHT]
+              << "\nAP Res Rt: " << state.ankle_pitch_resistance[RIGHT]
+              << "\nAR Res Lt: " << state.ankle_roll_resistance[LEFT]
+              << "\nAP Res Lt: " << state.ankle_pitch_resistance[LEFT]
+              << std::endl;
+
+//    elem.angles[RAR] += state.ankle_roll_resistance[RIGHT];
+//    elem.angles[RAP] += state.ankle_pitch_resistance[RIGHT];
+//    elem.angles[LAR] += state.ankle_roll_resistance[LEFT];
+//    elem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
 
 }
 
