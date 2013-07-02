@@ -206,8 +206,9 @@ protected:
      * \param dt Time change between last update and current update
      * \return void
     */
-    void balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
-        nudge_state_t &state, balance_gains_t &gains, double dt );
+    void balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &curElem,
+        zmp_traj_element_t &nextElem, nudge_state_t &state,
+        balance_gains_t &gains, double dt );
 
     /**
      * \brief Send balance state, which include balance mode, walk

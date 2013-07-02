@@ -129,8 +129,8 @@ void Walker::complyKnee( Hubo_Control &hubo, zmp_traj_element_t &elem,
     elem.angles[RHP] += -state.knee_offset[RIGHT]/2.0;
 }
 //FIXME
-void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
-        nudge_state_t &state, balance_gains_t &gains, double dt)
+void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &curElem,
+        zmp_traj_element_t &nextElem, nudge_state_t &state, balance_gains_t &gains, double dt)
 {
     // Reduce resistance terms with decay gain
     state.ankle_roll_resistance[LEFT] -= gains.decay_gain[LEFT]*state.ankle_roll_resistance[LEFT];
@@ -140,35 +140,40 @@ void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
     state.ankle_pitch_resistance[RIGHT] -= gains.decay_gain[RIGHT]*state.ankle_pitch_resistance[RIGHT];
 
 
-    // If we're in single-support stance then adjust joint angles using PD controller
+    // If we're in single-support stance then adjust joint angles using integral controller
     // to bring torque in ankles to desired torque in trajectory
-    if( elem.stance == SINGLE_LEFT )
+    if( nextElem.stance == SINGLE_LEFT )
     {
         state.ankle_pitch_resistance[LEFT] += dt*gains.straightening_pitch_gain[LEFT]
-                                                *( hubo.getLeftFootMy() );
+                                                *( curElem.torque[1][1] - hubo.getLeftFootMy() );
         state.ankle_roll_resistance[LEFT]  += dt*gains.straightening_roll_gain[LEFT]
-                                                *( hubo.getLeftFootMx() );
+                                                *( curElem.torque[1][0] - hubo.getLeftFootMx() );
     }
 
-    if( elem.stance == SINGLE_RIGHT )
+    if( nextElem.stance == SINGLE_RIGHT )
     {
         state.ankle_pitch_resistance[RIGHT] += dt*gains.straightening_pitch_gain[RIGHT]
-                                                 *( hubo.getRightFootMy() );
+                                                 *( curElem.torque[0][1] - hubo.getRightFootMy() );
         state.ankle_roll_resistance[RIGHT]  += dt*gains.straightening_roll_gain[RIGHT]
-                                                 *( hubo.getRightFootMx() );
+                                                 *( curElem.torque[0][0] - hubo.getRightFootMx() );
     }
 
+//    gains.straightening_pitch_gain[LEFT]*(curElem.torque[0][1] - hubo.getLeftFootMy())
+//    + (gains.straightening_pitch_gain[LEFT]*(curElem.torque[0][1] - hubo.getLeftFootMy())*dt
+
     std::cout << "\n"
+              << "\nR-Mx: " << hubo.getRightFootMx() << "\tR-My: " << hubo.getRightFootMy()
+              << "\nL-Mx: " << hubo.getLeftFootMx() << "\tL-My: " << hubo.getLeftFootMy()
               << "\nAR Res Rt: " << state.ankle_roll_resistance[RIGHT]
               << "\nAP Res Rt: " << state.ankle_pitch_resistance[RIGHT]
               << "\nAR Res Lt: " << state.ankle_roll_resistance[LEFT]
               << "\nAP Res Lt: " << state.ankle_pitch_resistance[LEFT]
               << std::endl;
 
-//    elem.angles[RAR] += state.ankle_roll_resistance[RIGHT];
-//    elem.angles[RAP] += state.ankle_pitch_resistance[RIGHT];
-//    elem.angles[LAR] += state.ankle_roll_resistance[LEFT];
-//    elem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
+//    nextElem.angles[RAR] += state.ankle_roll_resistance[RIGHT];
+//    nextElem.angles[RAP] += state.ankle_pitch_resistance[RIGHT];
+//    nextElem.angles[LAR] += state.ankle_roll_resistance[LEFT];
+//    nextElem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
 
 }
 
@@ -498,7 +503,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    //balanceAboveFoot( hubo, nextElem, state, gains, dt );
+    //balanceAboveFoot( hubo, currentElem, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 
