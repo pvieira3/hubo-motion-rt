@@ -310,7 +310,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
             double err=0;
             if( LF1!=i && LF2!=i && LF3!=i && LF4!=i && LF5!=i
              && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
-             && NK1!=i && NK2!=i && NKY!=i )
+             && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
                 err = (hubo.getJointAngleState( i )-currentTrajectory.traj[0].angles[i]);
 //            if( LSR == i )
 //                err -= hubo.getJointAngleMin(i);
