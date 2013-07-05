@@ -43,6 +43,7 @@
 #include "Hubo_Control.h"
 #include "balance-daemon.h"
 #include <hubo-zmp.h>
+#include "HuboKin.h"
 
 typedef struct nudge_state {
 
@@ -52,6 +53,7 @@ typedef struct nudge_state {
 
     Eigen::Vector3d nudge;
     Eigen::Vector3d spin;
+    Eigen::Vector3d bodyErr;
 
     double ankle_roll_compliance[2];
     double ankle_pitch_compliance[2];
@@ -64,7 +66,7 @@ typedef struct nudge_state {
     Eigen::Vector3d imu_offset;
 
     double V0[HUBO_JOINT_COUNT];
-    
+
 } nudge_state_t;
 
 
@@ -80,6 +82,7 @@ public:
      * \param jointVelContTol Tolerance in radians/s for when a desired joint velocity is reached
     */
     Walker(double maxInitTime=15, double jointSpaceTolerance=0.02, double jointVelContTol=6.0);
+
     /**
      * \brief Destructor for Walker class
     */
@@ -110,6 +113,7 @@ public:
 
 
 protected:
+
 
     /// Hubo_Control object used to get state info and send commands. 
     Hubo_Control hubo;
@@ -195,20 +199,18 @@ protected:
         nudge_state_t &state, balance_gains_t &gains, double dt );
 
     /**
-     * \brief Balance above the stance foot using the the force/torque
-     * sensors to equalibriate to the desired torque when in single
-     * support by driving the ankle torque to zero.
+     * \brief Nudge the hips to drive the torques in the measured torque
+     * in the ankles to the expected torques in the trajectory for the
+     * current timestep.
      * \param hubo Hubo_Control object to get state info from
      * \param elem ZMP trajectory element we are currently executing
-     * \param state Nudge state which stores the integrated knee offset
-       state.
-     * \param gains Knee gain values for balancing
+     * \param state Nudge state which stores the integrated body error.
+     * \param gains Gain values for balancing
      * \param dt Time change between last update and current update
      * \return void
     */
-    void balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &curElem,
-        zmp_traj_element_t &nextElem, nudge_state_t &state,
-        balance_gains_t &gains, double dt );
+    void nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
+            nudge_state_t &state, balance_gains_t &gains, double dt );
 
     /**
      * \brief Send balance state, which include balance mode, walk

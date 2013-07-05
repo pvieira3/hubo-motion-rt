@@ -87,10 +87,17 @@ typedef struct balance_gains {
 
     double straightening_pitch_gain[2];
     double straightening_roll_gain[2];
-    
+    double single_support_straightening_gain; 
+    double double_support_straightening_gain; 
+
     double spring_gain[2];
     double damping_gain[2];
     double fz_response[2];
+
+    double single_support_hip_nudge_kp;
+    double single_support_hip_nudge_kd;
+    double double_support_hip_nudge_kp;
+    double double_support_hip_nudge_kd;
 
 } balance_gains_t;
 

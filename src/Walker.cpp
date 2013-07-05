@@ -40,11 +40,182 @@
 #include "Walker.h"
 #include "balance-daemon.h"
 
+/**
+ * \brief Set value to zero if within the deadband defined by
+ * the interval -tau_dead_band to tau_dead_band, otherwise
+ * take the value that x exceeds either end of the deadband.
+ * \param x Number to apply deadband to.
+ * \return Number after deadband is applied.
+*/
+/*double applyDeadband( double x )
+{
+  if (x > tau_dead_band)
+    return x - tau_dead_band;
+  else if (x < -tau_dead_band)
+    return x + tau_dead_band;
+  else
+    return 0;
+}*/
+
+static inline void clamp(double& x, double cap) {
+  x = std::max(-cap, std::min(x, cap));
+}
+
+void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
+            nudge_state_t &state, balance_gains_t &gains, double dt )
+{
+    bool debug = true;
+    // Figure out if we're in single or double support stance and which leg
+    double kP, kD;
+    double side;
+    switch(elem.stance)
+    {
+        case SINGLE_LEFT:
+            side = LEFT;
+            kP = gains.single_support_hip_nudge_kp;
+            kD = gains.single_support_hip_nudge_kd;
+            break;
+        case SINGLE_RIGHT:
+            side = RIGHT;
+            kP = gains.single_support_hip_nudge_kp;
+            kD = gains.single_support_hip_nudge_kd;
+            break;
+        case DOUBLE_LEFT:
+        case DOUBLE_RIGHT:
+            side = 100;
+            kP = gains.double_support_hip_nudge_kp;
+            kD = gains.double_support_hip_nudge_kd;
+            break;
+        default:
+            return;
+    }
+    if(debug)
+    {
+        std::cerr << "side: " << side << "\n";
+        std::cerr << "kP, kD: " << kP << ", " << kD << "\n";
+    }
+    // Store leg joint angels for current trajectory timestep
+    std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev;
+    qPrev[LEFT](HY) = elem.angles[LHY],
+    qPrev[LEFT](HR) = elem.angles[LHR],
+    qPrev[LEFT](HP) = elem.angles[LHP],
+    qPrev[LEFT](KN) = elem.angles[LKN],
+    qPrev[LEFT](AP) = elem.angles[LAP],
+    qPrev[LEFT](AR) = elem.angles[LAR];
+
+    qPrev[RIGHT](HY) = elem.angles[RHY],
+    qPrev[RIGHT](HR) = elem.angles[RHR],
+    qPrev[RIGHT](HP) = elem.angles[RHP],
+    qPrev[RIGHT](KN) = elem.angles[RKN],
+    qPrev[RIGHT](AP) = elem.angles[RAP],
+    qPrev[RIGHT](AR) = elem.angles[RAR];
+
+    // Skew matrix for torque reaction logic
+    Eigen::Matrix3d skew; 
+    skew << 0, 1, 0,
+           -1, 0, 0,
+            0, 0, 0;
+
+    // Gain matrix for ankle roll and pitch
+    Eigen::Matrix3d shiftGains;
+    shiftGains << dt*kP,       0, 0,
+                      0,   dt*kP, 0,
+                      0,       0, 0;
+
+    // Get rotation matrix for each hip yaw
+    std::vector< Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d> > yawRot;
+    yawRot[LEFT] = Eigen::AngleAxisd(hubo.getJointAngle(LHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    yawRot[RIGHT]= Eigen::AngleAxisd(hubo.getJointAngle(RHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+    // TF for body to each foot
+    std::vector< Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d> > footTF;
+    // New joint angles for both legs
+    std::vector< Vector6d, Eigen::aligned_allocator<Vector6d> > qNew;
+    // Ankle torque error XYZ (ie. Roll/Pitch/Yaw), but just setting Z to zero.
+    Vector3d torqueErr;
+
+    // Determine how much we need to nudge to hips over to account for
+    // error in ankle torques about the x- and y- axes.
+    // If Roll torque is positive (ie. leaning left) we want hips to go right (ie. negative y-direction)
+    // If Pitch torque is positive (ie. leaning back) we want hips to go forward (ie. positive x-direction)
+    // Get TFs for feet
+    hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
+    hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
+    // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
+    if(side != LEFT && side != RIGHT)
+    {
+        torqueErr(0) = ((hubo.getLeftFootMy() - elem.torque[LEFT][1]) + (hubo.getRightFootMy() - elem.torque[RIGHT][1]))/2;
+        torqueErr(1) = ((hubo.getLeftFootMx() - elem.torque[LEFT][0]) + (hubo.getRightFootMx() - elem.torque[RIGHT][0]))/2;
+    }
+    else
+    {
+        torqueErr(0) = side = LEFT ? (hubo.getLeftFootMy() - elem.torque[LEFT][1]) : (hubo.getRightFootMy() - elem.torque[RIGHT][1]);
+        torqueErr(1) = side = LEFT ? (hubo.getLeftFootMx() - elem.torque[LEFT][0]) : (hubo.getRightFootMx() - elem.torque[RIGHT][0]);
+    }
+    torqueErr(2) = 0;
+    // Feet position errors (x,y)
+    Vector3d footErr = shiftGains * skew * torqueErr;
+    // Rotate by hip yaws and then translate by footErr to get body
+    // translation for both feet and average them to get total body translation.
+    if(side != LEFT && side != RIGHT)
+        state.bodyErr += ((yawRot[LEFT] * footErr) + (yawRot[RIGHT] * footErr)) / 2;
+    else
+        state.bodyErr += yawRot[side] * footErr;
+    // Pretranslate feet TF by body error translation vector
+    footTF[LEFT].pretranslate(state.bodyErr);
+    footTF[RIGHT].pretranslate(state.bodyErr);
+    // Run IK on the adjusted feet TF to get new joint angles
+    hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
+    hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
+
+    if(debug)
+    {
+        std::cerr << "torqueErr: " << torqueErr.transpose()
+                  << "\nfootErr: " << footErr.transpose()
+                  << "\nqDiff(LT): " << (qNew[LEFT] - qPrev[LEFT]).transpose()
+                  << "\nqDiff(RT): " << (qNew[RIGHT] - qPrev[RIGHT]).transpose()
+                  << std::endl;
+    }
+
+    bool ok = true;
+    double jointTol = 0.03; // radians
+    for(int i=0; i<2; i++)
+    {
+        for(int j=0; j<LEG_JOINT_COUNT; j++)
+        {
+            double qDiff = qNew[i](j) - qPrev[i](j);
+            if(qDiff > jointTol)
+            {
+                ok = false;
+                std::cerr << "Change in joint " << jointNames[j] << " = " << qDiff
+                          << " , which is greater than Joint Tolerance of " << jointTol
+                          << std::endl;
+            }
+        }
+    }
+    ok = false;//FIXME remove when tested
+    // Set leg joint angles for current timestep of trajectory
+    if(ok)
+    {
+        elem.angles[LHY] = qNew[LEFT](HY);
+        elem.angles[LHR] = qNew[LEFT](HR);
+        elem.angles[LHP] = qNew[LEFT](HP);
+        elem.angles[LKN] = qNew[LEFT](KN);
+        elem.angles[LAP] = qNew[LEFT](AP);
+        elem.angles[LAR] = qNew[LEFT](AR);
+
+        elem.angles[RHY] = qNew[RIGHT](HY);
+        elem.angles[RHR] = qNew[RIGHT](HR);
+        elem.angles[RHP] = qNew[RIGHT](HP);
+        elem.angles[RKN] = qNew[RIGHT](KN);
+        elem.angles[RAP] = qNew[RIGHT](AP);
+        elem.angles[RAR] = qNew[RIGHT](AR);
+    }
+}
 
 void Walker::flattenFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
 			nudge_state_t &state, balance_gains_t &gains, double dt )
 {
-    
      
     state.ankle_roll_compliance[LEFT] -= gains.decay_gain[LEFT]*state.ankle_roll_compliance[LEFT];
     state.ankle_roll_compliance[RIGHT] -= gains.decay_gain[RIGHT]*state.ankle_roll_compliance[RIGHT];
@@ -127,54 +298,6 @@ void Walker::complyKnee( Hubo_Control &hubo, zmp_traj_element_t &elem,
     elem.angles[RAP] += -state.knee_offset[RIGHT]/2.0;
     elem.angles[RKN] += state.knee_offset[RIGHT];
     elem.angles[RHP] += -state.knee_offset[RIGHT]/2.0;
-}
-//FIXME
-void Walker::balanceAboveFoot( Hubo_Control &hubo, zmp_traj_element_t &curElem,
-        zmp_traj_element_t &nextElem, nudge_state_t &state, balance_gains_t &gains, double dt)
-{
-    // Reduce resistance terms with decay gain
-    state.ankle_roll_resistance[LEFT] -= gains.decay_gain[LEFT]*state.ankle_roll_resistance[LEFT];
-    state.ankle_roll_resistance[RIGHT] -= gains.decay_gain[RIGHT]*state.ankle_roll_resistance[RIGHT];
-
-    state.ankle_pitch_resistance[LEFT] -= gains.decay_gain[LEFT]*state.ankle_pitch_resistance[LEFT];
-    state.ankle_pitch_resistance[RIGHT] -= gains.decay_gain[RIGHT]*state.ankle_pitch_resistance[RIGHT];
-
-
-    // If we're in single-support stance then adjust joint angles using integral controller
-    // to bring torque in ankles to desired torque in trajectory
-    if( nextElem.stance == SINGLE_LEFT )
-    {
-        state.ankle_pitch_resistance[LEFT] += dt*gains.straightening_pitch_gain[LEFT]
-                                                *( curElem.torque[1][1] - hubo.getLeftFootMy() );
-        state.ankle_roll_resistance[LEFT]  += dt*gains.straightening_roll_gain[LEFT]
-                                                *( curElem.torque[1][0] - hubo.getLeftFootMx() );
-    }
-
-    if( nextElem.stance == SINGLE_RIGHT )
-    {
-        state.ankle_pitch_resistance[RIGHT] += dt*gains.straightening_pitch_gain[RIGHT]
-                                                 *( curElem.torque[0][1] - hubo.getRightFootMy() );
-        state.ankle_roll_resistance[RIGHT]  += dt*gains.straightening_roll_gain[RIGHT]
-                                                 *( curElem.torque[0][0] - hubo.getRightFootMx() );
-    }
-
-//    gains.straightening_pitch_gain[LEFT]*(curElem.torque[0][1] - hubo.getLeftFootMy())
-//    + (gains.straightening_pitch_gain[LEFT]*(curElem.torque[0][1] - hubo.getLeftFootMy())*dt
-
-    std::cout << "\n"
-              << "\nR-Mx: " << hubo.getRightFootMx() << "\tR-My: " << hubo.getRightFootMy()
-              << "\nL-Mx: " << hubo.getLeftFootMx() << "\tL-My: " << hubo.getLeftFootMy()
-              << "\nAR Res Rt: " << state.ankle_roll_resistance[RIGHT]
-              << "\nAP Res Rt: " << state.ankle_pitch_resistance[RIGHT]
-              << "\nAR Res Lt: " << state.ankle_roll_resistance[LEFT]
-              << "\nAP Res Lt: " << state.ankle_pitch_resistance[LEFT]
-              << std::endl;
-
-//    nextElem.angles[RAR] += state.ankle_roll_resistance[RIGHT];
-//    nextElem.angles[RAP] += state.ankle_pitch_resistance[RIGHT];
-//    nextElem.angles[LAR] += state.ankle_roll_resistance[LEFT];
-//    nextElem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
-
 }
 
 Walker::Walker(double maxInitTime, double jointSpaceTolerance, double jointVelContinuityTolerance) :
@@ -270,14 +393,19 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
     bal_state.m_walk_mode = WALK_INITIALIZING;
     sendState();
 
+    // Get the balancing gains from the ach channel
     ach_get( &param_chan, &gains, sizeof(gains), &fs, NULL, ACH_O_LAST );
 
     hubo.update(true);
+
+    // Set all the joints to the initial posiiton in the trajectory
+    // using the control daemon to interpolate in joint space.
     for(int i=0; i<HUBO_JOINT_COUNT; i++)
     {
+        // Don't worry about where these joint are
         if( LF1!=i && LF2!=i && LF3!=i && LF4!=i && LF5!=i
          && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
-         && NK1!=i && NK2!=i && NKY!=i )
+         && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
         {
             hubo.setJointAngle( i, currentTrajectory.traj[0].angles[i] );
             hubo.setJointNominalSpeed( i, 0.4 );
@@ -295,10 +423,12 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
 
     hubo.sendControls();
 
+    // Wait specified time for joints to get into initial configuration,
+    // otherwise time out and alert user.
     double m_maxInitTime = 10;
     double biggestErr = 0;
     int worstJoint=-1;
-    
+
     double dt, time, stime; stime=hubo.getTime(); time=hubo.getTime();
     double norm = m_jointSpaceTolerance+1; // make sure this fails initially
     while( !daemon_sig_quit && (norm > m_jointSpaceTolerance && time-stime < m_maxInitTime)) {
@@ -308,6 +438,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
         for(int i=0; i<HUBO_JOINT_COUNT; i++)
         {
             double err=0;
+            // Don't worry about waiting for these joints to get into position.
             if( LF1!=i && LF2!=i && LF3!=i && LF4!=i && LF5!=i
              && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
              && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
@@ -326,7 +457,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
         }
         time = hubo.getTime();
     }
-
+    // Print timeout error if joints don't get to initial positions in time
     if( time-stime >= m_maxInitTime )
     {
         fprintf(stderr, "Warning: could not reach the starting Trajectory within %f seconds\n"
@@ -503,10 +634,12 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    //balanceAboveFoot( hubo, currentElem, nextElem, state, gains, dt );
+    //nudgeHips( hubo, currentElem, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 
+    // For each joint set it's position to that in the trajectory for the
+    // current timestep, which has been adjusted based on feedback.
     for(int i=0; i<HUBO_JOINT_COUNT; i++)
     {
 //          hubo.setJointTraj( i, currentElem.angles[i] );
@@ -514,8 +647,10 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
 //        hubo.setJointAngle( i, nextElem.angles[i] );
         hubo.passJointAngle( i, nextElem.angles[i] );
 
-
-        vel = (nextElem.angles[i]-currentElem.angles[i])*ZMP_TRAJ_FREQ_HZ;
+        // Compute and set joint velocity, used by the control daemon,
+        // based on current and next joint angles.
+        //FIXME vel = (nextElem.angles[i]-currentElem.angles[i])*ZMP_TRAJ_FREQ_HZ;
+        vel = (nextElem.angles[i]-currentElem.angles[i])/dt;
         hubo.setJointVelocity( i, vel );
 //        hubo.setJointNominalSpeed(i, vel);
 //        hubo.setJointNominalSpeed( i, 1*
@@ -523,8 +658,11 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
 //               (nextElem.angles[i]-currentElem.angles[i])*ZMP_TRAJ_FREQ_HZ );
 //               (nextElem.angles[i]-currentElem.angles[i])/dt );
 
-
-        accel = (vel-state.V0[i])*ZMP_TRAJ_FREQ_HZ;
+        // Compute and set joint acceleration, used by the control daemon,
+        // based on current and next joint velocities. Save new velocity in
+        // the state.V0 variable for use on next timestep.
+        //FIXME accel = (vel-state.V0[i])*ZMP_TRAJ_FREQ_HZ;
+        accel = (vel-state.V0[i])/dt;
         state.V0[i] = vel;
         hubo.setJointNominalAcceleration( i, 2*accel );
         if( i == RHY || i == RHR || i == RHP || i == RKN || i == RAR || i==RAP )
@@ -540,6 +678,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     hubo.setJointAngleMin( LHR, currentElem.angles[RHR]-M_PI/2.0 );
     hubo.setJointAngleMax( RHR, currentElem.angles[LHR]+M_PI/2.0 );
 
+    // Send all the new commands
     hubo.sendControls();
 }
 
