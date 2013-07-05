@@ -64,6 +64,7 @@ static inline void clamp(double& x, double cap) {
 void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
 {
+    bool debug = true;
     // Figure out if we're in single or double support stance and which leg
     double kP, kD;
     double side;
@@ -88,7 +89,11 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         default:
             return;
     }
-
+    if(debug)
+    {
+        std::cerr << "side: " << side << "\n";
+        std::cerr << "kP, kD: " << kP << ", " << kD << "\n";
+    }
     // Store leg joint angels for current trajectory timestep
     std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev;
     qPrev[LEFT](HY) = elem.angles[LHY],
@@ -114,8 +119,8 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     // Gain matrix for ankle roll and pitch
     Eigen::Matrix3d shiftGains;
     shiftGains << dt*kP,       0, 0,
-                        0, dt*kP, 0,
-                        0,       0, 0;
+                      0,   dt*kP, 0,
+                      0,       0, 0;
 
     // Get rotation matrix for each hip yaw
     std::vector< Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d> > yawRot;
@@ -133,48 +138,64 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     // error in ankle torques about the x- and y- axes.
     // If Roll torque is positive (ie. leaning left) we want hips to go right (ie. negative y-direction)
     // If Pitch torque is positive (ie. leaning back) we want hips to go forward (ie. positive x-direction)
+    // Get TFs for feet
+    hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
+    hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
+    // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
     if(side != LEFT && side != RIGHT)
     {
-        // Get TFs for feet
-        hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
-        hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
-        // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
         torqueErr(0) = ((hubo.getLeftFootMy() - elem.torque[LEFT][1]) + (hubo.getRightFootMy() - elem.torque[RIGHT][1]))/2;
         torqueErr(1) = ((hubo.getLeftFootMx() - elem.torque[LEFT][0]) + (hubo.getRightFootMx() - elem.torque[RIGHT][0]))/2;
-        torqueErr(2) = 0;
-        // Feet position errors (x,y)
-        Vector3d footErr = shiftGains * skew * torqueErr;
-        // Rotate by hip yaws and then translate by footErr to get body
-        // translation for both feet and average them to get total body translation.
-        state.bodyErr += ((yawRot[LEFT] * footErr) + (yawRot[RIGHT] * footErr)) / 2;
-        // Pretranslate feet TF by body error translation vector
-        footTF[LEFT].pretranslate(state.bodyErr);
-        footTF[RIGHT].pretranslate(state.bodyErr);
-        // Run IK on the adjusted feet TF to get new joint angles
-        hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
-        hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
     }
     else
     {
-        // Get TFs for feet
-        hubo.huboLegFK( footTF[side], qPrev[side], side ); 
-        // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
         torqueErr(0) = side = LEFT ? (hubo.getLeftFootMy() - elem.torque[LEFT][1]) : (hubo.getRightFootMy() - elem.torque[RIGHT][1]);
         torqueErr(1) = side = LEFT ? (hubo.getLeftFootMx() - elem.torque[LEFT][0]) : (hubo.getRightFootMx() - elem.torque[RIGHT][0]);
-        torqueErr(2) = 0;
-        // Feet position errors (x,y)
-        Vector3d footErr = shiftGains * skew * torqueErr;
-        // Rotate by hip yaws and then translate by footErr to get body
-        // translation for both feet and average them to get total body translation.
+    }
+    torqueErr(2) = 0;
+    // Feet position errors (x,y)
+    Vector3d footErr = shiftGains * skew * torqueErr;
+    // Rotate by hip yaws and then translate by footErr to get body
+    // translation for both feet and average them to get total body translation.
+    if(side != LEFT && side != RIGHT)
+        state.bodyErr += ((yawRot[LEFT] * footErr) + (yawRot[RIGHT] * footErr)) / 2;
+    else
         state.bodyErr += yawRot[side] * footErr;
-        // Pretranslate feet TF by body error translation vector
-        footTF[side].pretranslate(state.bodyErr);
-        // Run IK on the adjusted feet TF to get new joint angles
-        hubo.huboLegIK(qNew[side], footTF[side], qPrev[side], side);
+    // Pretranslate feet TF by body error translation vector
+    footTF[LEFT].pretranslate(state.bodyErr);
+    footTF[RIGHT].pretranslate(state.bodyErr);
+    // Run IK on the adjusted feet TF to get new joint angles
+    hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
+    hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
+
+    if(debug)
+    {
+        std::cerr << "torqueErr: " << torqueErr.transpose()
+                  << "\nfootErr: " << footErr.transpose()
+                  << "\nqDiff(LT): " << (qNew[LEFT] - qPrev[LEFT]).transpose()
+                  << "\nqDiff(RT): " << (qNew[RIGHT] - qPrev[RIGHT]).transpose()
+                  << std::endl;
     }
 
+    bool ok = true;
+    double jointTol = 0.03; // radians
+    for(int i=0; i<2; i++)
+    {
+        for(int j=0; j<LEG_JOINT_COUNT; j++)
+        {
+            double qDiff = qNew[i](j) - qPrev[i](j);
+            if(qDiff > jointTol)
+            {
+                ok = false;
+                std::cerr << "Change in joint " << jointNames[j] << " = " << qDiff
+                          << " , which is greater than Joint Tolerance of " << jointTol
+                          << std::endl;
+            }
+        }
+    }
+    ok = false;//FIXME remove when tested
     // Set leg joint angles for current timestep of trajectory
-    if(side == LEFT)
+    if(ok)
     {
         elem.angles[LHY] = qNew[LEFT](HY);
         elem.angles[LHR] = qNew[LEFT](HR);
@@ -182,24 +203,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         elem.angles[LKN] = qNew[LEFT](KN);
         elem.angles[LAP] = qNew[LEFT](AP);
         elem.angles[LAR] = qNew[LEFT](AR);
-    }
-    else if(side == RIGHT)
-    {
-        elem.angles[RHY] = qNew[RIGHT](HY);
-        elem.angles[RHR] = qNew[RIGHT](HR);
-        elem.angles[RHP] = qNew[RIGHT](HP);
-        elem.angles[RKN] = qNew[RIGHT](KN);
-        elem.angles[RAP] = qNew[RIGHT](AP);
-        elem.angles[RAR] = qNew[RIGHT](AR);
-    }
-    else
-    {
-        elem.angles[LHY] = qNew[LEFT](HY);
-        elem.angles[LHR] = qNew[LEFT](HR);
-        elem.angles[LHP] = qNew[LEFT](HP);
-        elem.angles[LKN] = qNew[LEFT](KN);
-        elem.angles[LAP] = qNew[LEFT](AP);
-        elem.angles[LAR] = qNew[LEFT](AR);
+
         elem.angles[RHY] = qNew[RIGHT](HY);
         elem.angles[RHR] = qNew[RIGHT](HR);
         elem.angles[RHP] = qNew[RIGHT](HP);
