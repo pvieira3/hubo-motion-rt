@@ -65,22 +65,25 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
 {
     // Figure out if we're in single or double support stance and which leg
-    double gain;
+    double kP, kD;
     double side;
     switch(elem.stance)
     {
         case SINGLE_LEFT:
             side = LEFT;
-            gain = gains.single_support_straightening_gain;
+            kP = gains.single_support_hip_nudge_kp;
+            kD = gains.single_support_hip_nudge_kd;
             break;
         case SINGLE_RIGHT:
             side = RIGHT;
-            gain = gains.single_support_straightening_gain;
+            kP = gains.single_support_hip_nudge_kp;
+            kD = gains.single_support_hip_nudge_kd;
             break;
         case DOUBLE_LEFT:
         case DOUBLE_RIGHT:
             side = 100;
-            gain = gains.double_support_straightening_gain;
+            kP = gains.double_support_hip_nudge_kp;
+            kD = gains.double_support_hip_nudge_kd;
             break;
         default:
             return;
@@ -110,8 +113,8 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
 
     // Gain matrix for ankle roll and pitch
     Eigen::Matrix3d shiftGains;
-    shiftGains << dt*gain,       0, 0,
-                        0, dt*gain, 0,
+    shiftGains << dt*kP,       0, 0,
+                        0, dt*kP, 0,
                         0,       0, 0;
 
     // Get rotation matrix for each hip yaw
@@ -119,9 +122,12 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     yawRot[LEFT] = Eigen::AngleAxisd(hubo.getJointAngle(LHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
     yawRot[RIGHT]= Eigen::AngleAxisd(hubo.getJointAngle(RHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
 
+    // TF for body to each foot
     std::vector< Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d> > footTF;
-    Vector3d torqueErr;
+    // New joint angles for both legs
     std::vector< Vector6d, Eigen::aligned_allocator<Vector6d> > qNew;
+    // Ankle torque error XYZ (ie. Roll/Pitch/Yaw), but just setting Z to zero.
+    Vector3d torqueErr;
 
     // Determine how much we need to nudge to hips over to account for
     // error in ankle torques about the x- and y- axes.
