@@ -57,6 +57,13 @@
     return 0;
 }*/
 
+/**
+ * \brief Clamp the input value to +/- some value
+ * defined by 'cap'.
+ * \param x Value to be capped
+ * \param cap Value to keep x within +/- itself
+ * \return void
+*/
 static inline void clamp(double& x, double cap) {
   x = std::max(-cap, std::min(x, cap));
 }
@@ -64,7 +71,7 @@ static inline void clamp(double& x, double cap) {
 void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
 {
-    bool debug = true;
+    bool debug = false;
     // Figure out if we're in single or double support stance and which leg
     double kP, kD;
     double side;
@@ -91,8 +98,8 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     }
     if(debug)
     {
-        std::cerr << "side: " << side << "\n";
-        std::cerr << "kP, kD: " << kP << ", " << kD << "\n";
+        std::cout << "side: " << side << "\n";
+        std::cout << "kP, kD: " << kP << ", " << kD << "\n";
     }
     // Store leg joint angels for current trajectory timestep
     std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev(2);
@@ -170,15 +177,16 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
 
     if(debug)
     {
-        std::cerr << "torqueErr: " << torqueErr.transpose()
+        std::cout << "torqueErr: " << torqueErr.transpose()
                   << "\nfootErr: " << footErr.transpose()
                   << "\nqDiff(LT): " << (qNew[LEFT] - qPrev[LEFT]).transpose()
                   << "\nqDiff(RT): " << (qNew[RIGHT] - qPrev[RIGHT]).transpose()
-                  << std::endl;
+                  << "\n";
     }
 
     bool ok = true;
-    double jointTol = 0.03; // radians
+    double jointTol = 0.01; // radians
+
     for(int i=0; i<2; i++)
     {
         std::string s = i==LEFT ? "LEFT" : "RIGHT";
@@ -187,19 +195,21 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             double qDiff = qNew[i](j) - qPrev[i](j);
             if(fabs(qDiff) > jointTol)
             {
-                ok = false;
+                // Cap joint change
                 qNew[i](j) = qDiff > 0 ? qPrev[i](j) + jointTol : qPrev[i](j) - jointTol;
-                std::cerr << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
-                          << " , which is greater than Joint Tolerance of " << jointTol
-                          << std::endl;
+                if(debug)
+                {
+                    std::cout << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
+                              << " , which is greater than Joint Tolerance of " << jointTol
+                              << "\n";
+                }
             }
         }
     }
-    ok = false;//FIXME remove when tested
+
     // Set leg joint angles for current timestep of trajectory
     if(ok)
     {
-        std::cerr << "ADJUSTING JOINT ANGLES\n";
         elem.angles[LHY] = qNew[LEFT](HY);
         elem.angles[LHR] = qNew[LEFT](HR);
         elem.angles[LHP] = qNew[LEFT](HP);
@@ -637,7 +647,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    //nudgeHips( hubo, nextElem, state, gains, dt );
+    nudgeHips( hubo, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 
