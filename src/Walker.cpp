@@ -95,7 +95,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         std::cerr << "kP, kD: " << kP << ", " << kD << "\n";
     }
     // Store leg joint angels for current trajectory timestep
-    std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev;
+    std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev(2);
     qPrev[LEFT](HY) = elem.angles[LHY],
     qPrev[LEFT](HR) = elem.angles[LHR],
     qPrev[LEFT](HP) = elem.angles[LHP],
@@ -123,14 +123,14 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
                       0,       0, 0;
 
     // Get rotation matrix for each hip yaw
-    std::vector< Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d> > yawRot;
+    std::vector< Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d> > yawRot(2);
     yawRot[LEFT] = Eigen::AngleAxisd(hubo.getJointAngle(LHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
     yawRot[RIGHT]= Eigen::AngleAxisd(hubo.getJointAngle(RHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
 
     // TF for body to each foot
-    std::vector< Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d> > footTF;
+    std::vector< Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d> > footTF(2);
     // New joint angles for both legs
-    std::vector< Vector6d, Eigen::aligned_allocator<Vector6d> > qNew;
+    std::vector< Vector6d, Eigen::aligned_allocator<Vector6d> > qNew(2);
     // Ankle torque error XYZ (ie. Roll/Pitch/Yaw), but just setting Z to zero.
     Vector3d torqueErr;
 
@@ -181,13 +181,14 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     double jointTol = 0.03; // radians
     for(int i=0; i<2; i++)
     {
-        for(int j=0; j<LEG_JOINT_COUNT; j++)
+        std::string s = i==LEFT ? "LEFT" : "RIGHT";
+        for(int j=0; j<6; j++)
         {
             double qDiff = qNew[i](j) - qPrev[i](j);
             if(qDiff > jointTol)
             {
                 ok = false;
-                std::cerr << "Change in joint " << jointNames[j] << " = " << qDiff
+                std::cerr << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
                           << " , which is greater than Joint Tolerance of " << jointTol
                           << std::endl;
             }
@@ -634,7 +635,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    //nudgeHips( hubo, currentElem, nextElem, state, gains, dt );
+    nudgeHips( hubo, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 
@@ -665,10 +666,10 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
         accel = (vel-state.V0[i])/dt;
         state.V0[i] = vel;
         hubo.setJointNominalAcceleration( i, 2*accel );
-        if( i == RHY || i == RHR || i == RHP || i == RKN || i == RAR || i==RAP )
-            std::cout << "(" << vel << ":" << accel << ")" << "\t";
+//        if( i == RHY || i == RHR || i == RHP || i == RKN || i == RAR || i==RAP )
+//            std::cout << "(" << vel << ":" << accel << ")" << "\t";
     }
-    std::cout << std::endl;
+//    std::cout << std::endl;
 
 //    hubo.setJointAngle( RSR, nextElem.angles[RSR] + hubo.getJointAngleMax(RSR) );
 //    hubo.setJointAngle( LSR, nextElem.angles[LSR] + hubo.getJointAngleMin(LSR) );

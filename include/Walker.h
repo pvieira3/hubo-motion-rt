@@ -43,7 +43,6 @@
 #include "Hubo_Control.h"
 #include "balance-daemon.h"
 #include <hubo-zmp.h>
-#include "HuboKin.h"
 
 typedef struct nudge_state {
 
