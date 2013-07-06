@@ -185,9 +185,10 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         for(int j=0; j<6; j++)
         {
             double qDiff = qNew[i](j) - qPrev[i](j);
-            if(qDiff > jointTol)
+            if(fabs(qDiff) > jointTol)
             {
                 ok = false;
+                qNew[i](j) = qDiff > 0 ? qPrev[i](j) + jointTol : qPrev[i](j) - jointTol;
                 std::cerr << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
                           << " , which is greater than Joint Tolerance of " << jointTol
                           << std::endl;
@@ -198,6 +199,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     // Set leg joint angles for current timestep of trajectory
     if(ok)
     {
+        std::cerr << "ADJUSTING JOINT ANGLES\n";
         elem.angles[LHY] = qNew[LEFT](HY);
         elem.angles[LHR] = qNew[LEFT](HR);
         elem.angles[LHP] = qNew[LEFT](HP);
@@ -635,7 +637,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    nudgeHips( hubo, nextElem, state, gains, dt );
+    //nudgeHips( hubo, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 
