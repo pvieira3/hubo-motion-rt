@@ -407,7 +407,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
          && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
          && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
         {
-            hubo.setJointAngle( i, currentTrajectory.traj[0].angles[i] );
+            hubo.setJointAngle( i, currentTrajectory.traj[0].angles[i] + bal_state.jointOffset[i] );
             hubo.setJointNominalSpeed( i, 0.4 );
             hubo.setJointNominalAcceleration( i, 0.4 );
         }
@@ -442,7 +442,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
             if( LF1!=i && LF2!=i && LF3!=i && LF4!=i && LF5!=i
              && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
              && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
-                err = (hubo.getJointAngleState( i )-currentTrajectory.traj[0].angles[i]);
+                err = (hubo.getJointAngleState( i )-currentTrajectory.traj[0].angles[i] + bal_state.jointOffset[i]);
 //            if( LSR == i )
 //                err -= hubo.getJointAngleMin(i);
 //            if( RSR == i )
@@ -634,7 +634,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    //nudgeHips( hubo, currentElem, nextElem, state, gains, dt );
+    nudgeHips( hubo, nextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
 
@@ -642,10 +642,10 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     // current timestep, which has been adjusted based on feedback.
     for(int i=0; i<HUBO_JOINT_COUNT; i++)
     {
-//          hubo.setJointTraj( i, currentElem.angles[i] );
+//        hubo.setJointTraj( i, currentElem.angles[i] );
 //        hubo.setJointTraj( i, nextElem.angles[i] );
 //        hubo.setJointAngle( i, nextElem.angles[i] );
-        hubo.passJointAngle( i, nextElem.angles[i] );
+        hubo.passJointAngle( i, nextElem.angles[i] + bal_state.jointOffset[i] );
 
         // Compute and set joint velocity, used by the control daemon,
         // based on current and next joint angles.

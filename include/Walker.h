@@ -39,7 +39,6 @@
 #ifndef WALKER_H
 #define WALKER_H
 
-
 #include "Hubo_Control.h"
 #include "balance-daemon.h"
 #include <hubo-zmp.h>

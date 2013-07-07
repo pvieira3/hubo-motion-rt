@@ -37,7 +37,6 @@
 
 #include "balance-daemon.h"
 #include "Walker.h"
-#include "Hubo_Control.h"
 #include "manip.h"
 
 
@@ -139,6 +138,11 @@ int main(int argc, char **argv)
             }
         }
 
+        // Set joint offsets based on balancing
+        state.jointOffset[LAR] = hubo.getJointAngle(LAR);
+        state.jointOffset[RAR] = hubo.getJointAngle(RAR);
+
+        // Send balance state to ach channel
         ach_put( &bal_state_chan, &state, sizeof(state) );
 
     }

@@ -39,6 +39,8 @@
 #ifndef BALANCE_DAEMON_H
 #define BALANCE_DAEMON_H
 
+#include "Hubo_Control.h"
+
 #define BALANCE_CMD_CHAN "balance-cmd"
 #define BALANCE_STATE_CHAN "balance-state"
 #define BALANCE_PARAM_CHAN "balance-param"
@@ -118,6 +120,8 @@ typedef struct balance_state {
 
     walk_mode_t m_walk_mode;
     walk_error_t m_walk_error;
+
+    double jointOffset[HUBO_JOINT_COUNT];
 
 } balance_state_t;
 
