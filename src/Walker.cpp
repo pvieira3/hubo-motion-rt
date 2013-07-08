@@ -294,18 +294,18 @@ void Walker::complyKnee( Hubo_Control &hubo, zmp_traj_element_t &elem,
     state.knee_velocity_offset[LEFT] =
                    gains.spring_gain[LEFT]*( elem.angles[LKN] - hubo.getJointAngle(LKN))
                  + gains.damping_gain[LEFT]*( -state.knee_velocity_offset[LEFT] )
-                 + gains.fz_response[LEFT]*( hubo.getLeftFootFz() );
+                 + gains.fz_response[LEFT]*( hubo.getLeftFootFz() - elem.force[1][2] );
 
     state.knee_velocity_offset[RIGHT] =
                    gains.spring_gain[RIGHT]*( elem.angles[LKN] - hubo.getJointAngle(LKN))
                  + gains.damping_gain[RIGHT]*( -state.knee_velocity_offset[RIGHT] )
-                 + gains.fz_response[RIGHT]*( hubo.getRightFootFz() );
+                 + gains.fz_response[RIGHT]*( hubo.getRightFootFz() - elem.force[0][2] );
    
     for(int i=0; i<2; i++)
         state.knee_offset[i] += dt*state.knee_velocity_offset[i];
 
     elem.angles[LAP] += -state.knee_offset[LEFT]/2.0;
-    elem.angles[LKN] += state.knee_offset[LEFT]/2.0;
+    elem.angles[LKN] += state.knee_offset[LEFT];
     elem.angles[LHP] += -state.knee_offset[LEFT]/2.0;
 
     elem.angles[RAP] += -state.knee_offset[RIGHT]/2.0;

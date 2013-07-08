@@ -76,40 +76,56 @@ static const char* walkStateStrings[NUM_OF_WALKSTATES+2] = {"WALKING_FORWARD", "
 /// ZMP trajectory constants
 enum {
   ZMP_TRAJ_FREQ_HZ = 200,   //!< frequency in Hertz of the zmp trajectory
-  ZMP_MAX_TRAJ_SIZE = 5000  //!< maximum size of the zmp trajectory
+  ZMP_MAX_TRAJ_SIZE = 7000  //!< maximum size of the zmp trajectory
 };
 
 /**
  * \brief Struct containing robot state for each timestep of trajectory
 */
 typedef struct zmp_traj_element {
-  double angles[HUBO_JOINT_COUNT]; //!< fully body joint angles for current timestep
-  double com[3][3];     //!< XYZ pos/vel/acc of CoM in frame of stance ankle, 10cm up from foot
-  double zmp[2];        //!< XY position of zmp in frame of stance ankle
-  double forces[2][3];  //!< right/left predicted normal forces at ankles
-  double torque[2][3];  //!< right/left predicted moments XYZ at ankles
+//  double angles[HUBO_JOINT_COUNT]; //!< fully body joint angles for current timestep
+//  double com[3][3];     //!< XYZ pos/vel/acc of CoM in frame of stance ankle, 10cm up from foot
+//  double zmp[2];        //!< XY position of zmp in frame of stance ankle
+//  double forces[2][3];  //!< right/left predicted normal forces at ankles
+//  double torque[2][3];  //!< right/left predicted moments XYZ at ankles
+//  stance_t stance;      //!< current stance of robot
+  uint32_t angles[HUBO_JOINT_COUNT]; //!< fully body joint angles for current timestep
+  uint32_t com[3][3];     //!< XYZ pos/vel/acc of CoM in frame of stance ankle, 10cm up from foot
+  uint32_t zmp[2];        //!< XY position of zmp in frame of stance ankle
+  uint32_t forces[2][3];  //!< right/left predicted normal forces at ankles
+  uint32_t torque[2][3];  //!< right/left predicted moments XYZ at ankles
   stance_t stance;      //!< current stance of robot
   // TODO: add orientation for IMU
-} zmp_traj_element_t;
-//}__attribute__((packed)) zmp_traj_element_t;
+//} zmp_traj_element_t;
+}__attribute__((packed)) zmp_traj_element_t;
 
 /**
  * \brief Struct containing entire zmp trajectory, including joint configuration
  * for each timestep, and trajectory meta data
 */
 typedef struct zmp_traj {
+//  zmp_traj_element_t traj[ZMP_MAX_TRAJ_SIZE]; //!< array of entire zmp trajectory info
+//  size_t count;             //!< size of first step trajectory in timesteps
+//  size_t end;               //!< size of two-step trajectory ending in EVEN stance
+//  size_t trajNumber;        //!< trajectory number
+//  size_t periodStartTick;   //!< start timestep of periodic portion of trajectory
+//  size_t periodEndTick;     //!< end timestep of periodic portion of trajectory
+//  walkState_t walkDirection;//!< walk direction for trajectory
+//  stepStance_t startStance; //!< start stance for trajectory
+//  stepStance_t goalStance;  //!< goal stance for trajectory
+//  bool reuse;               //!< whether or not to reuse the current trajectory's periodic portion
   zmp_traj_element_t traj[ZMP_MAX_TRAJ_SIZE]; //!< array of entire zmp trajectory info
-  size_t count;             //!< size of first step trajectory in timesteps
-  size_t end;               //!< size of two-step trajectory ending in EVEN stance
-  size_t trajNumber;        //!< trajectory number
-  size_t periodStartTick;   //!< start timestep of periodic portion of trajectory
-  size_t periodEndTick;     //!< end timestep of periodic portion of trajectory
+  uint16_t count;             //!< size of first step trajectory in timesteps
+  uint16_t end;               //!< size of two-step trajectory ending in EVEN stance
+  uint16_t trajNumber;        //!< trajectory number
+  uint16_t periodStartTick;   //!< start timestep of periodic portion of trajectory
+  uint16_t periodEndTick;     //!< end timestep of periodic portion of trajectory
   walkState_t walkDirection;//!< walk direction for trajectory
   stepStance_t startStance; //!< start stance for trajectory
   stepStance_t goalStance;  //!< goal stance for trajectory
   bool reuse;               //!< whether or not to reuse the current trajectory's periodic portion
-} zmp_traj_t;
-//}__attribute__((packed)) zmp_traj_t;
+//} zmp_traj_t;
+}__attribute__((packed)) zmp_traj_t;
 
 /**
  * \brief Struct containing walker state information so the zmp-daemon knows what
@@ -119,9 +135,9 @@ typedef struct walker_state {
   walkState_t walkDirection;    //!< walk direction being executed
   stepStance_t startStance;     //!< start stance of current step
   stepStance_t goalStance;      //!< goal stance of current step
-  int cyclesLeft;               //!< cycles left in current step trajectory
-} walker_state_t;
-//}__attribute__((packed)) walker_state_t;
+  uint16_t cyclesLeft;               //!< cycles left in current step trajectory
+//} walker_state_t;
+}__attribute__((packed)) walker_state_t;
 
 
 #endif // _HUBO_ZMP_H_
