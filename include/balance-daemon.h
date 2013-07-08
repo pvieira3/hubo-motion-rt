@@ -39,8 +39,6 @@
 #ifndef BALANCE_DAEMON_H
 #define BALANCE_DAEMON_H
 
-#include "Hubo_Control.h"
-
 #define BALANCE_CMD_CHAN "balance-cmd"
 #define BALANCE_STATE_CHAN "balance-state"
 #define BALANCE_PARAM_CHAN "balance-param"
