@@ -67,6 +67,94 @@
 static inline void clamp(double& x, double cap) {
   x = std::max(-cap, std::min(x, cap));
 }
+/*
+void Walker::legWorkspaceControl( Hubo_Control &hubo, zmp_traj_element_t &elem,
+            nudge_state_t &state, blaance_gains_t &gains, double dt, COMPLY_KNEE )
+{
+    // Store leg joint angels for current trajectory timestep
+    std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev(2);
+    qPrev[LEFT](HY) = elem.angles[LHY],
+    qPrev[LEFT](HR) = elem.angles[LHR],
+    qPrev[LEFT](HP) = elem.angles[LHP],
+    qPrev[LEFT](KN) = elem.angles[LKN],
+    qPrev[LEFT](AP) = elem.angles[LAP],
+    qPrev[LEFT](AR) = elem.angles[LAR];
+
+    qPrev[RIGHT](HY) = elem.angles[RHY],
+    qPrev[RIGHT](HR) = elem.angles[RHR],
+    qPrev[RIGHT](HP) = elem.angles[RHP],
+    qPrev[RIGHT](KN) = elem.angles[RKN],
+    qPrev[RIGHT](AP) = elem.angles[RAP],
+    qPrev[RIGHT](AR) = elem.angles[RAR];
+
+    // TF for body to each foot
+    std::vector< Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d> > footTF(2);
+    // New joint angles for both legs
+    std::vector< Vector6d, Eigen::aligned_allocator<Vector6d> > qNew(2);
+    // Ankle torque error XYZ (ie. Roll/Pitch/Yaw), but just setting Z to zero.
+
+    // Get TFs for feet
+    hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
+    hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
+
+    switch(CONTROLLER)
+    {
+        case COMPLY_KNEE:
+            complyKnee();
+            break;
+        case NUDGE_HIPS:
+            nudgeHips();
+            break;
+    }
+
+    // Run IK on the adjusted feet TF to get new joint angles
+    hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
+    hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
+
+    // Prevent giant joint angle changes
+    bool ok = true;
+    double jointTol = 0.01; // radians
+
+    for(int i=0; i<2; i++)
+    {
+        std::string s = i==LEFT ? "LEFT" : "RIGHT";
+        for(int j=0; j<6; j++)
+        {
+            double qDiff = qNew[i](j) - qPrev[i](j);
+            if(fabs(qDiff) > jointTol)
+            {
+                // Cap joint change
+                qNew[i](j) = qDiff > 0 ? qPrev[i](j) + jointTol : qPrev[i](j) - jointTol;
+                if(debug)
+                {
+                    std::cout << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
+                              << " , which is greater than Joint Tolerance of " << jointTol
+                              << "\n";
+                }
+            }
+        }
+    }
+
+    // Set leg joint angles for current timestep of trajectory
+    if(ok)
+    {
+        elem.angles[LHY] = qNew[LEFT](HY);
+        elem.angles[LHR] = qNew[LEFT](HR);
+        elem.angles[LHP] = qNew[LEFT](HP);
+        elem.angles[LKN] = qNew[LEFT](KN);
+        elem.angles[LAP] = qNew[LEFT](AP);
+        elem.angles[LAR] = qNew[LEFT](AR);
+
+        elem.angles[RHY] = qNew[RIGHT](HY);
+        elem.angles[RHR] = qNew[RIGHT](HR);
+        elem.angles[RHP] = qNew[RIGHT](HP);
+        elem.angles[RKN] = qNew[RIGHT](KN);
+        elem.angles[RAP] = qNew[RIGHT](AP);
+        elem.angles[RAR] = qNew[RIGHT](AR);
+    }
+
+
+}*/
 
 void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
@@ -287,32 +375,26 @@ void Walker::straightenBack( Hubo_Control &hubo, zmp_traj_element_t &elem,
     elem.angles[LAP] += state.ankle_pitch_resistance[LEFT];
 
 }
-
-void Walker::complyKnee( Hubo_Control &hubo, zmp_traj_element_t &elem,
+/*
+void Walker::complyKnee( Hubo_Control &hubo, Vector6d &angles,
         nudge_state_t &state, balance_gains_t &gains, double dt )
 {
-    state.knee_velocity_offset[LEFT] =
-                   gains.spring_gain[LEFT]*( elem.angles[LKN] - hubo.getJointAngle(LKN))
-                 + gains.damping_gain[LEFT]*( -state.knee_velocity_offset[LEFT] )
-                 + gains.fz_response[LEFT]*( hubo.getLeftFootFz() - elem.forces[1][2] );
-
-    state.knee_velocity_offset[RIGHT] =
-                   gains.spring_gain[RIGHT]*( elem.angles[LKN] - hubo.getJointAngle(LKN))
-                 + gains.damping_gain[RIGHT]*( -state.knee_velocity_offset[RIGHT] )
-                 + gains.fz_response[RIGHT]*( hubo.getRightFootFz() - elem.forces[0][2] );
-   
-    for(int i=0; i<2; i++)
-        state.knee_offset[i] += dt*state.knee_velocity_offset[i];
-
-    elem.angles[LAP] += -state.knee_offset[LEFT]/2.0;
-    elem.angles[LKN] += state.knee_offset[LEFT];
-    elem.angles[LHP] += -state.knee_offset[LEFT]/2.0;
-
-    elem.angles[RAP] += -state.knee_offset[RIGHT]/2.0;
-    elem.angles[RKN] += state.knee_offset[RIGHT];
-    elem.angles[RHP] += -state.knee_offset[RIGHT]/2.0;
+    if(elem.stance == SINGLE_RIGHT)
+    {
+        state.bodyErr(2) =
+                       gains.spring_gain[LEFT]*( angles[LKN] - hubo.getJointAngle(LKN) )
+                     + gains.damping_gain[LEFT]*( -state.knee_velocity_offset[LEFT] )
+                     + gains.fz_response[LEFT]*( hubo.getLeftFootFz() );
+    }
+    else if(elem.stance == SINGLE_LEFT)
+    {
+        state.bodyErr(2) =
+                       gains.spring_gain[RIGHT]*( angles[RKN] - hubo.getJointAngle(RKN) )
+                     + gains.damping_gain[RIGHT]*( -state.knee_velocity_offset[RIGHT] )
+                     + gains.fz_response[RIGHT]*( hubo.getRightFootFz() );
+    }
 }
-
+*/
 Walker::Walker(double maxInitTime, double jointSpaceTolerance, double jointVelContinuityTolerance) :
         m_maxInitTime(maxInitTime),
         m_jointSpaceTolerance( jointSpaceTolerance ),
@@ -358,10 +440,14 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
     keepWalking = true;
     size_t fs;
  
-    zmp_traj_t prevTrajectory, currentTrajectory, nextTrajectory;
-    memset( &prevTrajectory, 0, sizeof(prevTrajectory) );
-    memset( &currentTrajectory, 0, sizeof(currentTrajectory) );
-    memset( &nextTrajectory, 0, sizeof(nextTrajectory) );
+    zmp_traj_t *prevTrajectory, *currentTrajectory, *nextTrajectory;
+    prevTrajectory = new zmp_traj_t;
+    currentTrajectory = new zmp_traj_t;
+    nextTrajectory = new zmp_traj_t;
+
+    memset( prevTrajectory, 0, sizeof(*prevTrajectory) );
+    memset( currentTrajectory, 0, sizeof(*currentTrajectory) );
+    memset( nextTrajectory, 0, sizeof(*nextTrajectory) );
     
     // TODO: Consider making these values persistent
     memset( &state, 0, sizeof(state) );
@@ -374,23 +460,23 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
     bal_state.m_walk_error = NO_WALK_ERROR;
     sendState();
 
-    currentTrajectory.reuse = true;
+    currentTrajectory->reuse = true;
     fprintf(stdout, "Waiting for first trajectory\n"); fflush(stdout);
     ach_status_t r;
     do {
         struct timespec t;
         clock_gettime( ACH_DEFAULT_CLOCK, &t );
         t.tv_sec += 1;
-        r = ach_get( &zmp_chan, &currentTrajectory, sizeof(currentTrajectory), &fs,
+        r = ach_get( &zmp_chan, currentTrajectory, sizeof(*currentTrajectory), &fs,
                     &t, ACH_O_WAIT | ACH_O_LAST );
 
         checkCommands();
         if( cmd.cmd_request != BAL_ZMP_WALKING )
             keepWalking = false;
     } while(!daemon_sig_quit && keepWalking && (r==ACH_TIMEOUT
-                || !currentTrajectory.reuse) ); // TODO: Replace this with something more intelligent
+                || !currentTrajectory->reuse) ); // TODO: Replace this with something more intelligent
 
-    if(!keepWalking || !currentTrajectory.reuse) // TODO: Take out the reuse condition here
+    if(!keepWalking || !currentTrajectory->reuse) // TODO: Take out the reuse condition here
     {
         bal_state.m_walk_mode = WALK_INACTIVE;
         sendState();
@@ -420,7 +506,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
          && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
          && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
         {
-            hubo.setJointAngle( i, currentTrajectory.traj[0].angles[i] + bal_state.jointOffset[i] );
+            hubo.setJointAngle( i, currentTrajectory->traj[0].angles[i] + bal_state.jointOffset[i] );
             hubo.setJointNominalSpeed( i, 0.4 );
             hubo.setJointNominalAcceleration( i, 0.4 );
         }
@@ -431,8 +517,8 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
     hubo.setJointNominalSpeed( LKN, 0.8 );
     hubo.setJointNominalAcceleration( LKN, 0.8 );
 
-//    hubo.setJointAngle( RSR, currentTrajectory.traj[0].angles[RSR] + hubo.getJointAngleMax(RSR) );
-//    hubo.setJointAngle( LSR, currentTrajectory.traj[0].angles[LSR] + hubo.getJointAngleMin(LSR) );
+//    hubo.setJointAngle( RSR, currentTrajectory->traj[0].angles[RSR] + hubo.getJointAngleMax(RSR) );
+//    hubo.setJointAngle( LSR, currentTrajectory->traj[0].angles[LSR] + hubo.getJointAngleMin(LSR) );
 
     hubo.sendControls();
 
@@ -455,7 +541,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
             if( LF1!=i && LF2!=i && LF3!=i && LF4!=i && LF5!=i
              && RF1!=i && RF2!=i && RF3!=i && RF4!=i && RF5!=i
              && NK1!=i && NK2!=i && NKY!=i && LWR!=i && RWR!=i)
-                err = (hubo.getJointAngleState( i )-currentTrajectory.traj[0].angles[i] + bal_state.jointOffset[i]);
+                err = (hubo.getJointAngleState( i )-currentTrajectory->traj[0].angles[i] + bal_state.jointOffset[i]);
 //            if( LSR == i )
 //                err -= hubo.getJointAngleMin(i);
 //            if( RSR == i )
@@ -488,7 +574,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
         fprintf(stdout, "Beginning main walking loop\n"); fflush(stdout);
     while(keepWalking && !daemon_sig_quit)
     {
-        haveNewTrajectory = checkForNewTrajectory(nextTrajectory, haveNewTrajectory);
+        haveNewTrajectory = checkForNewTrajectory(*nextTrajectory, haveNewTrajectory);
         ach_get( &param_chan, &gains, sizeof(gains), &fs, NULL, ACH_O_LAST );
         hubo.update(true);
 
@@ -506,25 +592,25 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
         {
             bal_state.m_walk_error = NO_WALK_ERROR;
             nextTimeIndex = timeIndex+1;
-            executeTimeStep( hubo, prevTrajectory.traj[prevTimeIndex],
-                                   currentTrajectory.traj[timeIndex],
-                                   currentTrajectory.traj[nextTimeIndex],
+            executeTimeStep( hubo, prevTrajectory->traj[prevTimeIndex],
+                                   currentTrajectory->traj[timeIndex],
+                                   currentTrajectory->traj[nextTimeIndex],
                                    state, gains, dt );
             
         }
-        else if( timeIndex == currentTrajectory.periodEndTick && haveNewTrajectory )
+        else if( timeIndex == currentTrajectory->periodEndTick && haveNewTrajectory )
         {
-            if( validateNextTrajectory( currentTrajectory.traj[timeIndex],
-                                        nextTrajectory.traj[0], dt ) )
+            if( validateNextTrajectory( currentTrajectory->traj[timeIndex],
+                                        nextTrajectory->traj[0], dt ) )
             {
                 nextTimeIndex = 0;
-                executeTimeStep( hubo, currentTrajectory.traj[prevTimeIndex],
-                                       currentTrajectory.traj[timeIndex],
-                                       nextTrajectory.traj[nextTimeIndex],
+                executeTimeStep( hubo, currentTrajectory->traj[prevTimeIndex],
+                                       currentTrajectory->traj[timeIndex],
+                                       nextTrajectory->traj[nextTimeIndex],
                                        state, gains, dt );
                 
-                memcpy( &prevTrajectory, &currentTrajectory, sizeof(prevTrajectory) );
-                memcpy( &currentTrajectory, &nextTrajectory, sizeof(nextTrajectory) );
+                memcpy( prevTrajectory, currentTrajectory, sizeof(*prevTrajectory) );
+                memcpy( currentTrajectory, nextTrajectory, sizeof(*nextTrajectory) );
                 fprintf(stderr, "Notice: Swapping in new trajectory\n");
             }
             else
@@ -533,38 +619,38 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
                 bal_state.m_walk_error = WALK_FAILED_SWAP;
 
                 nextTimeIndex = timeIndex+1;
-                executeTimeStep( hubo, currentTrajectory.traj[prevTimeIndex],
-                                       currentTrajectory.traj[timeIndex],
-                                       currentTrajectory.traj[nextTimeIndex],
+                executeTimeStep( hubo, currentTrajectory->traj[prevTimeIndex],
+                                       currentTrajectory->traj[timeIndex],
+                                       currentTrajectory->traj[nextTimeIndex],
                                        state, gains, dt );
             }
             haveNewTrajectory = false;
         }
-        else if( timeIndex == currentTrajectory.periodEndTick && currentTrajectory.reuse )
+        else if( timeIndex == currentTrajectory->periodEndTick && currentTrajectory->reuse )
         {
             checkCommands();
             if( cmd.cmd_request != BAL_ZMP_WALKING )
-                currentTrajectory.reuse = false;
+                currentTrajectory->reuse = false;
 
-            if( currentTrajectory.reuse == true )
-                nextTimeIndex = currentTrajectory.periodStartTick;
+            if( currentTrajectory->reuse == true )
+                nextTimeIndex = currentTrajectory->periodStartTick;
             else
                 nextTimeIndex = timeIndex+1;
 
-            executeTimeStep( hubo, currentTrajectory.traj[prevTimeIndex],
-                                   currentTrajectory.traj[timeIndex],
-                                   currentTrajectory.traj[nextTimeIndex],
+            executeTimeStep( hubo, currentTrajectory->traj[prevTimeIndex],
+                                   currentTrajectory->traj[timeIndex],
+                                   currentTrajectory->traj[nextTimeIndex],
                                    state, gains, dt );
         }
-        else if( timeIndex < currentTrajectory.count-1 )
+        else if( timeIndex < currentTrajectory->count-1 )
         {
             nextTimeIndex = timeIndex+1;
-            executeTimeStep( hubo, currentTrajectory.traj[prevTimeIndex],
-                                   currentTrajectory.traj[timeIndex],
-                                   currentTrajectory.traj[nextTimeIndex],
+            executeTimeStep( hubo, currentTrajectory->traj[prevTimeIndex],
+                                   currentTrajectory->traj[timeIndex],
+                                   currentTrajectory->traj[nextTimeIndex],
                                    state, gains, dt );
         }
-        else if( timeIndex == currentTrajectory.count-1 && haveNewTrajectory )
+        else if( timeIndex == currentTrajectory->count-1 && haveNewTrajectory )
         {
             checkCommands();
             if( cmd.cmd_request != BAL_ZMP_WALKING )
@@ -572,18 +658,18 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
 
             if( keepWalking )
             {
-                if( validateNextTrajectory( currentTrajectory.traj[timeIndex],
-                                            nextTrajectory.traj[0], dt ) )
+                if( validateNextTrajectory( currentTrajectory->traj[timeIndex],
+                                            nextTrajectory->traj[0], dt ) )
                 {
                     bal_state.m_walk_error = NO_WALK_ERROR;
                     nextTimeIndex = 0;
-                    executeTimeStep( hubo, currentTrajectory.traj[prevTimeIndex],
-                                           currentTrajectory.traj[timeIndex],
-                                           nextTrajectory.traj[nextTimeIndex],
+                    executeTimeStep( hubo, currentTrajectory->traj[prevTimeIndex],
+                                           currentTrajectory->traj[timeIndex],
+                                           nextTrajectory->traj[nextTimeIndex],
                                            state, gains, dt );
                     
-                    memcpy( &prevTrajectory, &currentTrajectory, sizeof(prevTrajectory) );
-                    memcpy( &currentTrajectory, &nextTrajectory, sizeof(nextTrajectory) );
+                    memcpy( prevTrajectory, currentTrajectory, sizeof(*prevTrajectory) );
+                    memcpy( currentTrajectory, nextTrajectory, sizeof(*nextTrajectory) );
                 }
                 else
                 {
