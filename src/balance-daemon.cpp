@@ -35,6 +35,7 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "Hubo_Control.h"
 #include "balance-daemon.h"
 #include "Walker.h"
 #include "manip.h"
