@@ -271,8 +271,10 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     footTF[LEFT].pretranslate(state.bodyErr);
     footTF[RIGHT].pretranslate(state.bodyErr);
     // Run IK on the adjusted feet TF to get new joint angles
-    hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
-    hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
+    bool ok = true;
+    ok = hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
+    if(ok)
+        ok = hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
 
     if(debug)
     {
@@ -286,29 +288,6 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
                   << "\t";
     }
 
-    bool ok = true;
-/*    double jointTol = 0.01; // radians
-
-    for(int i=0; i<2; i++)
-    {
-        std::string s = i==LEFT ? "LEFT" : "RIGHT";
-        for(int j=0; j<6; j++)
-        {
-            double qDiff = qNew[i](j) - qPrev[i](j);
-            if(fabs(qDiff) > jointTol)
-            {
-                // Cap joint change
-                qNew[i](j) = qDiff > 0 ? qPrev[i](j) + jointTol : qPrev[i](j) - jointTol;
-                if(debug)
-                {
-                    std::cout << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
-                              << " , which is greater than Joint Tolerance of " << jointTol
-                              << "\n";
-                }
-            }
-        }
-    }
-*/
     // Set leg joint angles for current timestep of trajectory
     if(ok)
     {
