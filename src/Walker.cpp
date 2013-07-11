@@ -160,9 +160,9 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
 {
     bool debug = false;
+    double kP, kD;  //!< Proportional and derivative gains
+    double side;    //!< variable for stance leg
     // Figure out if we're in single or double support stance and which leg
-    double kP, kD;
-    double side;
     switch(elem.stance)
     {
         case SINGLE_LEFT:
@@ -184,10 +184,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         default:
             return;
     }
-    if(debug)
-    {
-        //std::cout << "kP, kD: " << kP << ", " << kD << "\n";
-    }
+
     // Store leg joint angels for current trajectory timestep
     std::vector<Vector6d, Eigen::aligned_allocator<Vector6d> > qPrev(2);
     qPrev[LEFT](HY) = elem.angles[LHY],
@@ -209,11 +206,6 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     skew << 0, 1, 0,
            -1, 0, 0,
             0, 0, 0;
-    //FIXME The version below is opposite b/c hubomz computes reaction torque at ankle
-    // instead of torque at F/T sensor
-//    skew << 0, -1, 0,
-//            1, 0, 0,
-//            0, 0, 0;
 
     // Gain matrix for ankle roll and pitch
     Eigen::Matrix3d shiftGains;
@@ -241,9 +233,11 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
     hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
 
-    std::cout << "foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
+//        std::cout << "foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
 
     // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
+    //FIXME The version below is has elem.torques negative b/c hubomz computes reaction torque at ankle
+    // instead of torque at F/T sensor
     if(side != LEFT && side != RIGHT)
     {
         torqueErr(0) = ((-elem.torque[LEFT][0] - hubo.getLeftFootMx()) + (-elem.torque[RIGHT][0] - hubo.getRightFootMx()))/2;
@@ -256,7 +250,19 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     }
     torqueErr(2) = 0;
     // Feet position errors (x,y)
-    Vector3d instantaneousFeetOffset = shiftGains * skew * torqueErr;
+    Vector3d instantaneousFeetOffset;
+
+    // Check if we're on the ground, if not set instantaneous feet offset
+    // to zero so integrated feet offset doesn't change, but we still apply it.
+    const double forceThreshold = 20; // Newtons
+    if(hubo.getLeftFootFz() + hubo.getRightFootFz() > forceThreshold)
+        instantaneousFeetOffset = shiftGains * skew * torqueErr;
+    else
+        instantaneousFeetOffset.setZero();
+
+    // Decay the integratedFeetOffset
+    state.integratedFeetOffset *= gains.decay_gain[LEFT];
+
     // Rotate by hip yaws and then translate by instantaneousFeetOffset to get body
     // translation for both feet and average them to get total body translation.
     if(side != LEFT && side != RIGHT)
@@ -264,7 +270,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     else
         state.integratedFeetOffset += yawRot[side] * instantaneousFeetOffset;
 
-    const double integratedFeetOffsetTol = 0.02;
+    const double integratedFeetOffsetTol = 0.06;
     double n = state.integratedFeetOffset.norm();
     if (n > integratedFeetOffsetTol) {
       state.integratedFeetOffset *= integratedFeetOffsetTol/n;
@@ -280,7 +286,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         ok = hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
 
     hubo.huboLegFK( footTF[LEFT], qNew[LEFT], LEFT ); 
-    std::cout << "now foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
+//        std::cout << "now foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
 
     if(debug)
     {
@@ -316,6 +322,8 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         elem.angles[RAP] = qNew[RIGHT](AP);
         elem.angles[RAR] = qNew[RIGHT](AR);
     }
+    else
+        std::cout << "IK Invalid\n";
 }
 
 void Walker::flattenFoot( Hubo_Control &hubo, zmp_traj_element_t &elem,
@@ -740,22 +748,22 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     zmp_traj_element_t tempNextElem;
     memcpy(&tempNextElem, &nextElem, sizeof(zmp_traj_element_t));
 
-    int legidx[6] = { LHY, LHR, LHP, LKN, LAP, LAR };
+//    int legidx[6] = { LHY, LHR, LHP, LKN, LAP, LAR };
     
-    std::cout << "before: ";
-    for (int i=0; i<6; ++i) { std::cout << tempNextElem.angles[legidx[i]] << " "; }
-    std::cout << "\n";
+//    std::cout << "before: ";
+//    for (int i=0; i<6; ++i) { std::cout << tempNextElem.angles[legidx[i]] << " "; }
+//    std::cout << "\n";
 
     //flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
     nudgeHips( hubo, tempNextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
-    double vel, accel;
+//    double vel, accel;
 
-    std::cout << "after: ";
-    for (int i=0; i<6; ++i) { std::cout << tempNextElem.angles[legidx[i]] << " "; }
-    std::cout << "\n";
+//    std::cout << "after: ";
+//    for (int i=0; i<6; ++i) { std::cout << tempNextElem.angles[legidx[i]] << " "; }
+//    std::cout << "\n";
 
     // For each joint set it's position to that in the trajectory for the
     // current timestep, which has been adjusted based on feedback.
