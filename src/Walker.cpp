@@ -271,8 +271,10 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     footTF[LEFT].pretranslate(state.bodyErr);
     footTF[RIGHT].pretranslate(state.bodyErr);
     // Run IK on the adjusted feet TF to get new joint angles
-    hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
-    hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
+    bool ok = true;
+    ok = hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
+    if(ok)
+        ok = hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
 
     if(debug)
     {
