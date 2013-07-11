@@ -538,7 +538,7 @@ void controlLoop()
             } // end: for loop
 
 
-            if(ctrl.active == 1 && C_state.paused==0) 
+            if(ctrl.active == 1 && C_state.paused==0)
             {
                 presult = ach_put( &chan_hubo_ref, &H_ref, sizeof(H_ref) );
                 if(presult != ACH_OK)
