@@ -161,7 +161,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
 {
     bool debug = false;
     double kP, kD;  //!< Proportional and derivative gains
-    double side;    //!< variable for stance leg
+    int side;    //!< variable for stance leg
     // Figure out if we're in single or double support stance and which leg
     switch(elem.stance)
     {
@@ -223,7 +223,7 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     // New joint angles for both legs
     std::vector< Vector6d, Eigen::aligned_allocator<Vector6d> > qNew(2);
     // Ankle torque error XYZ (ie. Roll/Pitch/Yaw), but just setting Z to zero.
-    Vector3d torqueErr;
+    Vector3d torqueErr[2];
 
     // Determine how much we need to nudge to hips over to account for
     // error in ankle torques about the x- and y- axes.
@@ -233,11 +233,21 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
     hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
 
-//        std::cout << "foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
+    std::cout << "foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
 
     // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
     //FIXME The version below is has elem.torques negative b/c hubomz computes reaction torque at ankle
     // instead of torque at F/T sensor
+
+    torqueErr[LEFT](0) = (-elem.torque[LEFT][0] - hubo.getLeftFootMx());
+    torqueErr[LEFT](1) = (-elem.torque[LEFT][1] - hubo.getLeftFootMy());
+    torqueErr[LEFT](2) = 0;
+    
+    torqueErr[RIGHT](0) = (-elem.torque[RIGHT][0] - hubo.getRightFootMx());
+    torqueErr[RIGHT](1) = (-elem.torque[RIGHT][1] - hubo.getRightFootMy());
+    torqueErr[RIGHT](2) = 0;
+
+    /*
     if(side != LEFT && side != RIGHT)
     {
         torqueErr(0) = ((-elem.torque[LEFT][0] - hubo.getLeftFootMx()) + (-elem.torque[RIGHT][0] - hubo.getRightFootMx()))/2;
@@ -249,26 +259,36 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
         torqueErr(1) = side = LEFT ? (-elem.torque[LEFT][1] - hubo.getLeftFootMy()) : (-elem.torque[RIGHT][1] - hubo.getRightFootMy());
     }
     torqueErr(2) = 0;
+*/
     // Feet position errors (x,y)
     Vector3d instantaneousFeetOffset;
 
     // Check if we're on the ground, if not set instantaneous feet offset
     // to zero so integrated feet offset doesn't change, but we still apply it.
     const double forceThreshold = 20; // Newtons
-    if(hubo.getLeftFootFz() + hubo.getRightFootFz() > forceThreshold)
-        instantaneousFeetOffset = shiftGains * skew * torqueErr;
-    else
+    if(hubo.getLeftFootFz() + hubo.getRightFootFz() > forceThreshold) {
+       // instantaneousFeetOffset = shiftGains * skew * torqueErr;
+
+      if (side != LEFT && side != RIGHT) {
+        instantaneousFeetOffset = shiftGains * (yawRot[LEFT]*skew*torqueErr[LEFT] + yawRot[RIGHT]*skew*torqueErr[RIGHT])/2;
+      } else {
+        instantaneousFeetOffset = shiftGains * yawRot[side]*skew*torqueErr[side];
+      }
+
+    } else
         instantaneousFeetOffset.setZero();
 
     // Decay the integratedFeetOffset
-    state.integratedFeetOffset *= gains.decay_gain[LEFT];
+    state.integratedFeetOffset -= gains.decay_gain[LEFT]*state.integratedFeetOffset;
 
     // Rotate by hip yaws and then translate by instantaneousFeetOffset to get body
     // translation for both feet and average them to get total body translation.
-    if(side != LEFT && side != RIGHT)
-        state.integratedFeetOffset += ((yawRot[LEFT] * instantaneousFeetOffset) + (yawRot[RIGHT] * instantaneousFeetOffset)) / 2;
-    else
-        state.integratedFeetOffset += yawRot[side] * instantaneousFeetOffset;
+    //if(side != LEFT && side != RIGHT)
+    //    state.integratedFeetOffset += ((yawRot[LEFT] * instantaneousFeetOffset) + (yawRot[RIGHT] * instantaneousFeetOffset)) / 2;
+    //else
+    //    state.integratedFeetOffset += yawRot[side] * instantaneousFeetOffset;
+
+    state.integratedFeetOffset += instantaneousFeetOffset;
 
     const double integratedFeetOffsetTol = 0.06;
     double n = state.integratedFeetOffset.norm();
@@ -284,9 +304,10 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     ok = hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
     if(ok)
         ok = hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
+    // TODO: FIXME: MZ doesn't like the above code, he will explain
 
     hubo.huboLegFK( footTF[LEFT], qNew[LEFT], LEFT ); 
-//        std::cout << "now foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
+    std::cout << "now foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
 
     if(debug)
     {

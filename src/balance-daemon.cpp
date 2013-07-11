@@ -174,15 +174,20 @@ void staticBalance(Hubo_Control &hubo, balance_cmd_t &cmd, balance_gains_t &gain
     hubo.setJointAngleMax( RHP, 0 );
 
 
-    double L1 = 2*0.3002;
-    double L2 = 0.28947 + 0.0795;
-    
+    double L1 = 0.33008 + 0.32995; //2*0.3002; Two leg lengths
+    double L2 = 0.28947 + 0.0795; // FIXME not the correct value Waist to neck
+
     if( cmd.height-L2 > L1 )
         cmd.height = L1+L2;
     else if( cmd.height-L2 < 0.25 ) //TODO: Don't hard code this
         cmd.height = L1+0.2;
 
     double knee = acos( (cmd.height-L2)/L1 )*2;
+    if(knee != knee)
+    {
+        std::cout << "knee's a NAN in balance-daemon\n";
+        knee = 0; //FIXME
+    }
 
     double kneeAngleErrorL = knee - hubo.getJointAngle( LKN );
     double kneeAngleErrorR = knee - hubo.getJointAngle( RKN );

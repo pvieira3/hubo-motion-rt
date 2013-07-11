@@ -496,8 +496,8 @@ void controlLoop()
                         }
                         else
                         {
-                            fprintf(stderr, "Joint %d has invalid control mode: %d\n",
-                                jnt, (int)ctrl.joint[jnt].mode );
+                            fprintf(stderr, "Joint %s has invalid control mode: %d\n",
+                                jointNames[jnt], (int)ctrl.joint[jnt].mode );
                         }
 
 //                        timeElapse[jnt] += dt;
@@ -509,7 +509,7 @@ void controlLoop()
                 }
                 else if(fail[jnt]==0 && ctrl.joint[jnt].mode != CTRL_HOME)
                 {
-                    fprintf(stderr, "JOINT %d FROZEN! Exceeded error limit(%g):%g, Ref:%f, State:%f\n", jnt,
+                    fprintf(stderr, "JOINT %s FROZEN! Exceeded error limit(%g):%g, Ref:%f, State:%f\n", jointNames[jnt],
                         fabs(errorFactor*ctrl.joint[jnt].error_limit*dtMax), err, H_ref.ref[jnt], H_state.joint[jnt].pos );
                     V[jnt]=0; V0[jnt]=0;
                     H_ref.ref[jnt] = H_state.joint[jnt].pos;
@@ -518,7 +518,7 @@ void controlLoop()
                 }
                 else if( ctrl.joint[jnt].mode == CTRL_RESET && reset[jnt]==0 )
                 {
-                    fprintf(stdout, "Joint %d has been reset\n", jnt);
+                    fprintf(stdout, "Joint %s has been reset\n", jointNames[jnt]);
                     V[jnt]=0; V0[jnt]=0; dV[jnt]=0;
                     dr[jnt]=0;
                     fail[jnt]=0;
@@ -531,8 +531,10 @@ void controlLoop()
                     fprintf( stderr, "JOINT FROZEN! You have requested a NaN for joint #%s!\n", jointNames[jnt] );
                     fail[jnt] = 1;
                     C_state.status[jnt] = 1;
-                    fprintf(stdout, "Request:(Pos:%f | Speed:%f | Vel:%f | Acc:%f)\tCurrent Ref:%f\tPrevious:%f\tdt:%f\tV:%f\tV0:%f\n", ctrl.joint[jnt].position, ctrl.joint[jnt].speed, ctrl.joint[jnt].velocity, ctrl.joint[jnt].acceleration, H_ref.ref[jnt], stored_ref.ref[jnt], dt, V[jnt], V0[jnt]);
-
+                    fprintf(stdout, "Request:(Pos:%f | Speed:%f | Vel:%f | Acc:%f)\tCurrent Ref:%f\tPrevious:%f\tdt:%f\tV:%f\tV0:%f\tMode:%d\n",
+                                ctrl.joint[jnt].position, ctrl.joint[jnt].speed, ctrl.joint[jnt].velocity, ctrl.joint[jnt].acceleration,
+                                H_ref.ref[jnt], stored_ref.ref[jnt], dt, V[jnt], V0[jnt], ctrl.joint[jnt].mode );
+                    H_ref.ref[jnt] = stored_ref.ref[jnt];
                 }                    
 
             } // end: for loop
