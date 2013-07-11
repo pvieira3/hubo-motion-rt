@@ -159,7 +159,7 @@ void Walker::legWorkspaceControl( Hubo_Control &hubo, zmp_traj_element_t &elem,
 void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
 {
-    bool debug = true;
+    bool debug = false;
     // Figure out if we're in single or double support stance and which leg
     double kP, kD;
     double side;
@@ -206,14 +206,14 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
 
     // Skew matrix for torque reaction logic
     Eigen::Matrix3d skew; 
-//    skew << 0, 1, 0,
-//           -1, 0, 0,
-//            0, 0, 0;
+    skew << 0, 1, 0,
+           -1, 0, 0,
+            0, 0, 0;
     //FIXME The version below is opposite b/c hubomz computes reaction torque at ankle
     // instead of torque at F/T sensor
-    skew << 0, -1, 0,
-            1, 0, 0,
-            0, 0, 0;
+//    skew << 0, -1, 0,
+//            1, 0, 0,
+//            0, 0, 0;
 
     // Gain matrix for ankle roll and pitch
     Eigen::Matrix3d shiftGains;
@@ -240,57 +240,64 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     // Get TFs for feet
     hubo.huboLegFK( footTF[LEFT], qPrev[LEFT], LEFT ); 
     hubo.huboLegFK( footTF[RIGHT], qPrev[RIGHT], RIGHT );
+
+    std::cout << "foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
+
     // Averaged torque error in ankles (roll and pitch) (yaw is always zero)
     if(side != LEFT && side != RIGHT)
     {
-        torqueErr(0) = ((elem.torque[LEFT][0] - hubo.getLeftFootMx()) + (elem.torque[RIGHT][0] - hubo.getRightFootMx()))/2;
-        torqueErr(1) = ((elem.torque[LEFT][1] - hubo.getLeftFootMy()) + (elem.torque[RIGHT][1]) - hubo.getRightFootMy())/2;
+        torqueErr(0) = ((-elem.torque[LEFT][0] - hubo.getLeftFootMx()) + (-elem.torque[RIGHT][0] - hubo.getRightFootMx()))/2;
+        torqueErr(1) = ((-elem.torque[LEFT][1] - hubo.getLeftFootMy()) + (-elem.torque[RIGHT][1]) - hubo.getRightFootMy())/2;
     }
     else
     {
-        torqueErr(0) = side = LEFT ? (elem.torque[LEFT][0] - hubo.getLeftFootMx()) : (elem.torque[RIGHT][0] - hubo.getRightFootMx());
-        torqueErr(1) = side = LEFT ? (elem.torque[LEFT][1] - hubo.getLeftFootMy()) : (elem.torque[RIGHT][1] - hubo.getRightFootMy());
+        torqueErr(0) = side = LEFT ? (-elem.torque[LEFT][0] - hubo.getLeftFootMx()) : (-elem.torque[RIGHT][0] - hubo.getRightFootMx());
+        torqueErr(1) = side = LEFT ? (-elem.torque[LEFT][1] - hubo.getLeftFootMy()) : (-elem.torque[RIGHT][1] - hubo.getRightFootMy());
     }
     torqueErr(2) = 0;
     // Feet position errors (x,y)
-    Vector3d footErr = shiftGains * skew * torqueErr;
-    // Rotate by hip yaws and then translate by footErr to get body
+    Vector3d instantaneousFeetOffset = shiftGains * skew * torqueErr;
+    // Rotate by hip yaws and then translate by instantaneousFeetOffset to get body
     // translation for both feet and average them to get total body translation.
     if(side != LEFT && side != RIGHT)
-        state.bodyErr += ((yawRot[LEFT] * footErr) + (yawRot[RIGHT] * footErr)) / 2;
+        state.integratedFeetOffset += ((yawRot[LEFT] * instantaneousFeetOffset) + (yawRot[RIGHT] * instantaneousFeetOffset)) / 2;
     else
-        state.bodyErr += yawRot[side] * footErr;
+        state.integratedFeetOffset += yawRot[side] * instantaneousFeetOffset;
 
-    const double bodyErrTol = 0.02;
-    double n = state.bodyErr.norm();
-    if (n > bodyErrTol) {
-      state.bodyErr *= bodyErrTol/n;
+    const double integratedFeetOffsetTol = 0.02;
+    double n = state.integratedFeetOffset.norm();
+    if (n > integratedFeetOffsetTol) {
+      state.integratedFeetOffset *= integratedFeetOffsetTol/n;
     }
 
     // Pretranslate feet TF by body error translation vector
-    footTF[LEFT].pretranslate(state.bodyErr);
-    footTF[RIGHT].pretranslate(state.bodyErr);
+    footTF[LEFT].pretranslate(state.integratedFeetOffset);
+    footTF[RIGHT].pretranslate(state.integratedFeetOffset);
     // Run IK on the adjusted feet TF to get new joint angles
     bool ok = true;
     ok = hubo.huboLegIK(qNew[LEFT], footTF[LEFT], qPrev[LEFT], LEFT);
     if(ok)
         ok = hubo.huboLegIK(qNew[RIGHT], footTF[RIGHT], qPrev[RIGHT], RIGHT);
 
+    hubo.huboLegFK( footTF[LEFT], qNew[LEFT], LEFT ); 
+    std::cout << "now foot is supposedly at " << footTF[LEFT].translation().transpose() << "\n";
+
     if(debug)
     {
-        std::cout << " K: " << kP
-                  << " TdL: " << elem.torque[LEFT][0] << ", " << elem.torque[LEFT][1]
-                  << " TdR: " << elem.torque[RIGHT][0] << ", " << elem.torque[RIGHT][1]
-                  << " MyLR: " << hubo.getLeftFootMy() << ", " << hubo.getRightFootMy()
-                  << " Te: " << torqueErr.transpose()
-                  //<< " Fte: " << footErr.transpose()
+        std::cout //<< " K: " << kP
+                  //<< " TdL: " << -elem.torque[LEFT][0] << ", " << -elem.torque[LEFT][1]
+                  //<< " TdR: " << -elem.torque[RIGHT][0] << ", " << -elem.torque[RIGHT][1]
+                  //<< " MyLR: " << hubo.getLeftFootMy() << ", " << hubo.getRightFootMy()
+                  //<< " MxLR: " << hubo.getLeftFootMx() << ", " << hubo.getRightFootMx()
+                  //<< " Te: " << torqueErr.transpose()
+                  //<< " Fte: " << instantaneousFeetOffset.transpose()
                   //<< " qDfL: " << (qNew[LEFT] - qPrev[LEFT]).transpose()
-                  //<< " qDfR: " << (qNew[RIGHT] - qPrev[RIGHT]).transpose()
-                  << " bE: " << state.bodyErr.transpose()
+                  << " FeetE: " << state.integratedFeetOffset.transpose()
+                  << "\tqDfR: " << qNew[RIGHT].transpose()
                   << "\n";
     }
 
-    bool ok = false;
+    //ok = false;
 
     // Set leg joint angles for current timestep of trajectory
     if(ok)
@@ -728,12 +735,27 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
             zmp_traj_element_t &currentElem, zmp_traj_element &nextElem,
             nudge_state_t &state, balance_gains_t &gains, double dt )
 {
+    // Make copy of zmp_traj_element so we don't effect the trajectory that's
+    // being recycled or it will be like recycling a changing trajectory. Not Good!
+    zmp_traj_element_t tempNextElem;
+    memcpy(&tempNextElem, &nextElem, sizeof(zmp_traj_element_t));
+
+    int legidx[6] = { LHY, LHR, LHP, LKN, LAP, LAR };
+    
+    std::cout << "before: ";
+    for (int i=0; i<6; ++i) { std::cout << tempNextElem.angles[legidx[i]] << " "; }
+    std::cout << "\n";
+
     //flattenFoot( hubo, nextElem, state, gains, dt );
     //straightenBack( hubo, nextElem, state, gains, dt );
     //complyKnee( hubo, nextElem, state, gains, dt );
-    nudgeHips( hubo, nextElem, state, gains, dt );
+    nudgeHips( hubo, tempNextElem, state, gains, dt );
     //nudgeRefs( hubo, nextElem, state, dt, hkin ); //vprev, verr, dt );
     double vel, accel;
+
+    std::cout << "after: ";
+    for (int i=0; i<6; ++i) { std::cout << tempNextElem.angles[legidx[i]] << " "; }
+    std::cout << "\n";
 
     // For each joint set it's position to that in the trajectory for the
     // current timestep, which has been adjusted based on feedback.
@@ -742,13 +764,16 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
 //        hubo.setJointTraj( i, currentElem.angles[i] );
 //        hubo.setJointTraj( i, nextElem.angles[i] );
 //        hubo.setJointAngle( i, nextElem.angles[i] );
-        hubo.passJointAngle( i, nextElem.angles[i] + bal_state.jointOffset[i] );
+        hubo.passJointAngle( i, tempNextElem.angles[i] + 0*bal_state.jointOffset[i] );
         
         // Compute and set joint velocity, used by the control daemon,
         // based on current and next joint angles.
         //FIXME vel = (nextElem.angles[i]-currentElem.angles[i])*ZMP_TRAJ_FREQ_HZ;
-        vel = (nextElem.angles[i]-currentElem.angles[i])/dt;
-        hubo.setJointVelocity( i, vel );
+        //FIXME FIXME Not storing modified trajectory so this velocity doesn't make sense
+        // but it doesn't matter since we're using passJointAngle, which doesn't using the
+        // control daemon's velocity.
+        //vel = (nextElem.angles[i]-currentElem.angles[i])/dt;
+        //hubo.setJointVelocity( i, vel );
 //        hubo.setJointNominalSpeed(i, vel);
 //        hubo.setJointNominalSpeed( i, 1*
 //                (nextElem.angles[i]-currentElem.angles[i])*ZMP_TRAJ_FREQ_HZ/2.0 );
@@ -759,9 +784,9 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
         // based on current and next joint velocities. Save new velocity in
         // the state.V0 variable for use on next timestep.
         //FIXME accel = (vel-state.V0[i])*ZMP_TRAJ_FREQ_HZ;
-        accel = (vel-state.V0[i])/dt;
-        state.V0[i] = vel;
-        hubo.setJointNominalAcceleration( i, 2*accel );
+        //accel = (vel-state.V0[i])/dt;
+        //state.V0[i] = vel;
+        //hubo.setJointNominalAcceleration( i, 2*accel );
 //        if( i == RHY || i == RHR || i == RHP || i == RKN || i == RAR || i==RAP )
 //            std::cout << "(" << vel << ":" << accel << ")" << "\t";
     }

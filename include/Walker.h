@@ -51,7 +51,7 @@ typedef struct nudge_state {
 
     Eigen::Vector3d nudge;
     Eigen::Vector3d spin;
-    Eigen::Vector3d bodyErr;
+    Eigen::Vector3d integratedFeetOffset;
 
     double ankle_roll_compliance[2];
     double ankle_pitch_compliance[2];
