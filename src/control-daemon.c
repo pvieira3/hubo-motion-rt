@@ -224,6 +224,7 @@ void controlLoop()
             {
                 t = H_state.time;
                 dt = t - t0;
+                daemon_assert( dt > 0, __LINE__ ); // FIXME: Remove this
                 t0 = t;
                 for(int i=0; i<HUBO_JOINT_COUNT; i++)
                 {
@@ -527,9 +528,11 @@ void controlLoop()
 
                 if( H_ref.ref[jnt] != H_ref.ref[jnt] && fail[jnt]==0 )
                 {
-                    fprintf( stderr, "JOINT FROZEN! You have requested a NaN for joint #%d!\n", jnt );
+                    fprintf( stderr, "JOINT FROZEN! You have requested a NaN for joint #%s!\n", jointNames[jnt] );
                     fail[jnt] = 1;
                     C_state.status[jnt] = 1;
+                    fprintf(stdout, "Request:(Pos:%f | Speed:%f | Vel:%f | Acc:%f)\tCurrent Ref:%f\tPrevious:%f\tdt:%f\tV:%f\tV0:%f\n", ctrl.joint[jnt].position, ctrl.joint[jnt].speed, ctrl.joint[jnt].velocity, ctrl.joint[jnt].acceleration, H_ref.ref[jnt], stored_ref.ref[jnt], dt, V[jnt], V0[jnt]);
+
                 }                    
 
             } // end: for loop
