@@ -276,39 +276,20 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
 
     if(debug)
     {
-        std::cout << "desTorque LEFT: " << elem.torque[LEFT][0] << ", " << elem.torque[LEFT][1]
-                  << "\t desTorque RIGT: " << elem.torque[RIGHT][0] << ", " << elem.torque[RIGHT][1]
-                  << "\ttorqueErr: " << torqueErr.transpose()
-                  << "\tfootErr: " << footErr.transpose()
-                  << "\tqDiff(LT): " << (qNew[LEFT] - qPrev[LEFT]).transpose()
-                  << "\tqDiff(RT): " << (qNew[RIGHT] - qPrev[RIGHT]).transpose()
-                  << "\tbodyErr: " << state.bodyErr.transpose()
-                  << "\t";
+        std::cout << " K: " << kP
+                  << " TdL: " << elem.torque[LEFT][0] << ", " << elem.torque[LEFT][1]
+                  << " TdR: " << elem.torque[RIGHT][0] << ", " << elem.torque[RIGHT][1]
+                  << " MyLR: " << hubo.getLeftFootMy() << ", " << hubo.getRightFootMy()
+                  << " Te: " << torqueErr.transpose()
+                  //<< " Fte: " << footErr.transpose()
+                  //<< " qDfL: " << (qNew[LEFT] - qPrev[LEFT]).transpose()
+                  //<< " qDfR: " << (qNew[RIGHT] - qPrev[RIGHT]).transpose()
+                  << " bE: " << state.bodyErr.transpose()
+                  << "\n";
     }
 
-    bool ok = true;
-/*    double jointTol = 0.01; // radians
+    bool ok = false;
 
-    for(int i=0; i<2; i++)
-    {
-        std::string s = i==LEFT ? "LEFT" : "RIGHT";
-        for(int j=0; j<6; j++)
-        {
-            double qDiff = qNew[i](j) - qPrev[i](j);
-            if(fabs(qDiff) > jointTol)
-            {
-                // Cap joint change
-                qNew[i](j) = qDiff > 0 ? qPrev[i](j) + jointTol : qPrev[i](j) - jointTol;
-                if(debug)
-                {
-                    std::cout << "Change in joint " << j << " of " << s << " side" << " = " << qDiff
-                              << " , which is greater than Joint Tolerance of " << jointTol
-                              << "\n";
-                }
-            }
-        }
-    }
-*/
     // Set leg joint angles for current timestep of trajectory
     if(ok)
     {
@@ -524,6 +505,7 @@ void Walker::commenceWalking(balance_state_t &parent_state, nudge_state_t &state
             hubo.setJointNominalSpeed( i, 0.4 );
             hubo.setJointNominalAcceleration( i, 0.4 );
         }
+        //std::cout << jointNames[i] << " = " << currentTrajectory->traj[0].angles[i] + bal_state.jointOffset[i] << "\n";
     }
     
     hubo.setJointNominalSpeed( RKN, 0.8 );
@@ -759,7 +741,7 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
 //        hubo.setJointTraj( i, nextElem.angles[i] );
 //        hubo.setJointAngle( i, nextElem.angles[i] );
         hubo.passJointAngle( i, nextElem.angles[i] + bal_state.jointOffset[i] );
-
+        
         // Compute and set joint velocity, used by the control daemon,
         // based on current and next joint angles.
         //FIXME vel = (nextElem.angles[i]-currentElem.angles[i])*ZMP_TRAJ_FREQ_HZ;
@@ -791,12 +773,12 @@ void Walker::executeTimeStep( Hubo_Control &hubo, zmp_traj_element_t &prevElem,
     hubo.setJointAngleMin( LHR, currentElem.angles[RHR]-M_PI/2.0 );
     hubo.setJointAngleMax( RHR, currentElem.angles[LHR]+M_PI/2.0 );
 
-    LegVector lL, rL;
+    //LegVector lL, rL;
     // Send all the new commands
-    hubo.getLeftLegAngles(lL);
-    hubo.getRightLegAngles(rL);
-    std::cout << "refL: " << lL.transpose() << "\trefR: " << rL.transpose() << "\n";
-    //hubo.sendControls();
+    //hubo.getLeftLegAngles(lL);
+    //hubo.getRightLegAngles(rL);
+    //std::cout << "refL: " << lL.transpose() << "\trefR: " << rL.transpose() << "\n";
+    hubo.sendControls();
 }
 
 
