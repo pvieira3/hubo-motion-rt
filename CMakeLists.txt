@@ -48,21 +48,26 @@ add_executable(balance-daemon ${balance_daemon_source})
 add_executable(manip-daemon ${manip_daemon_source})
 
 # Install Libraries
-INSTALL(TARGETS libdaemonizer DESTINATION ${LIBRARY_INSTALL_PATH})
-INSTALL(TARGETS libhuboctrl DESTINATION ${LIBRARY_INSTALL_PATH})
+INSTALL(TARGETS libdaemonizer
+                libhuboctrl
+        DESTINATION ${LIBRARY_INSTALL_PATH})
 
 # Install Headers
-INSTALL(FILES include/Hubo_Control.h DESTINATION /usr/local/include/)
-INSTALL(FILES include/control-daemon.h DESTINATION /usr/local/include/)
-INSTALL(FILES include/balance-daemon.h DESTINATION /usr/local/include/)
-INSTALL(FILES include/manip.h DESTINATION /usr/local/include/)
-INSTALL(FILES include/hubo-zmp.h DESTINATION /usr/local/include/)
+INSTALL(FILES include/Hubo_Control.h 
+              include/control-daemon.h 
+              include/balance-daemon.h
+              include/manip.h
+              include/hubo-zmp.h
+        DESTINATION /usr/local/include/)
 
 # Install Tables
 INSTALL(FILES tables/control.table DESTINATION /etc/hubo-ach/)
 
-# Install Programs
+# Install Service
 INSTALL(PROGRAMS scripts/hubo-motion DESTINATION /etc/init.d/)
-INSTALL(PROGRAMS control-daemon DESTINATION /usr/local/bin/)
-INSTALL(PROGRAMS balance-daemon DESTINATION /usr/local/bin/)
-INSTALL(PROGRAMS manip-daemon DESTINATION /usr/local/bin/)
+
+# Install Daemons
+INSTALL(PROGRAMS control-daemon
+                 balance-daemon
+                 manip-daemon
+        DESTINATION /usr/local/bin/)
