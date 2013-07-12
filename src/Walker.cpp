@@ -213,12 +213,6 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
                         0, dt*kP, 0,
                         0,     0, 0;
 
-    // Derivative gain matrix for ankle roll and pitch
-    Eigen::Matrix3d shiftGainsKd;
-    shiftGainsKd << kD,  0, 0,
-                     0, kD, 0,
-                     0,  0, 0;
-
     // Get rotation matrix for each hip yaw
     std::vector< Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d> > yawRot(2);
     yawRot[LEFT] = Eigen::AngleAxisd(hubo.getJointAngle(LHY), Eigen::Vector3d::UnitZ()).toRotationMatrix();
@@ -260,16 +254,14 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     const double forceThreshold = 20; // Newtons
     if(hubo.getLeftFootFz() + hubo.getRightFootFz() > forceThreshold)
     {
+        std::cout << "Fzs = " << hubo.getLeftFootFz() << ", " << hubo.getRightFootFz() << "\n";
         if (side != LEFT && side != RIGHT)
         {
-            instantaneousFeetOffset = (shiftGainsKp * (yawRot[LEFT]*skew*torqueErr[LEFT] + yawRot[RIGHT]*skew*torqueErr[RIGHT])/2)
-                                      - (shiftGainsKd * (yawRot[LEFT]*skew*(torqueErr[LEFT] - state.prevTorqueErr[LEFT])
-                                         + yawRot[RIGHT]*skew*(torqueErr[RIGHT] - state.prevTorqueErr[RIGHT]))/2);
+            instantaneousFeetOffset = (shiftGainsKp * (yawRot[LEFT]*skew*torqueErr[LEFT] + yawRot[RIGHT]*skew*torqueErr[RIGHT])/2);
         }
         else
         {
-            instantaneousFeetOffset = (shiftGainsKp * yawRot[side]*skew*torqueErr[side])
-                                      - (shiftGainsKd * yawRot[side]*skew*(torqueErr[side] - state.prevTorqueErr[side]));
+            instantaneousFeetOffset = (shiftGainsKp * yawRot[side]*skew*torqueErr[side]);
         }
     }
     else

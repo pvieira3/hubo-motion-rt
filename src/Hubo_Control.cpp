@@ -1,4 +1,4 @@
-t/*
+/*
  * Copyright (c) 2013, Georgia Tech Research Corporation
  * All rights reserved.
  *
