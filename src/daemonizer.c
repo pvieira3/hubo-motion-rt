@@ -203,7 +203,6 @@ void daemonize(const char *daemon_name, int priority)
     // Now we execute as the final process
     parent = getppid();
 
-
     // TODO: Look into correctly handling these signals (SIG_DFL is default and SIG_IGN is ignore):
     signal( SIGCHLD, SIG_DFL ); // Child process dies
     signal( SIGTSTP, SIG_IGN ); // Stop (pause) signal
@@ -232,6 +231,12 @@ void daemonize(const char *daemon_name, int priority)
                 errno, strerror(errno) );
         exit( EXIT_FAILURE );
     }
+
+    // Write process PID to lock file
+//    FILE* fp;
+//    fp = fopen(lockfile, "w");
+//    fprintf(fp, "%d", sid);
+//    fclose(fp);
 
     struct stat logst = {0};
     if( stat(LOGDIR, &logst) == -1 )
