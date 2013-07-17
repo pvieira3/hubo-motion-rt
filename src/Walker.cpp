@@ -209,9 +209,9 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
 
     // Proportional gain matrix for ankle roll and pitch
     Eigen::Matrix3d shiftGainsKp;
-    shiftGainsKp << dt*kP,     0, 0,
-                        0, dt*kP, 0,
-                        0,     0, 0;
+    shiftGainsKp << kP,  0, 0,
+                     0, kP, 0,
+                     0,  0, 0;
 
     // Derivative gain matrix for ankle roll and pitch
     Eigen::Matrix3d shiftGainsKd;
@@ -260,15 +260,16 @@ void Walker::nudgeHips( Hubo_Control &hubo, zmp_traj_element_t &elem,
     const double forceThreshold = 20; // Newtons
     if(hubo.getLeftFootFz() + hubo.getRightFootFz() > forceThreshold)
     {
+        std::cout << "Fzs = " << hubo.getLeftFootFz() << ", " << hubo.getRightFootFz() << "\n";
         if (side != LEFT && side != RIGHT)
         {
-            instantaneousFeetOffset = (shiftGainsKp * (yawRot[LEFT]*skew*torqueErr[LEFT] + yawRot[RIGHT]*skew*torqueErr[RIGHT])/2)
+            instantaneousFeetOffset = (dt*shiftGainsKp * (yawRot[LEFT]*skew*torqueErr[LEFT] + yawRot[RIGHT]*skew*torqueErr[RIGHT])/2)
                                       - (shiftGainsKd * (yawRot[LEFT]*skew*(torqueErr[LEFT] - state.prevTorqueErr[LEFT])
                                          + yawRot[RIGHT]*skew*(torqueErr[RIGHT] - state.prevTorqueErr[RIGHT]))/2);
         }
         else
         {
-            instantaneousFeetOffset = (shiftGainsKp * yawRot[side]*skew*torqueErr[side])
+            instantaneousFeetOffset = (dt*shiftGainsKp * yawRot[side]*skew*torqueErr[side])
                                       - (shiftGainsKd * yawRot[side]*skew*(torqueErr[side] - state.prevTorqueErr[side]));
         }
     }
