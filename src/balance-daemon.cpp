@@ -35,9 +35,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "Hubo_Control.h"
 #include "balance-daemon.h"
+//#include "DrcHuboKin.h"
 #include "Walker.h"
+#include "Hubo_Control.h"
 #include "manip.h"
 
 
@@ -53,8 +54,13 @@ void staticBalance(Hubo_Control &hubo, balance_cmd_t &cmd, balance_gains_t &gain
 
 int main(int argc, char **argv)
 {
-    //Hubo_Control hubo("balance-daemon", 35);
-    Hubo_Control hubo;
+    Hubo_Control hubo("balance-daemon", 35);
+    //DrcHuboKin kin;
+
+
+
+
+    //Hubo_Control hubo;
 
     hubo.storeAllDefaults();
 
